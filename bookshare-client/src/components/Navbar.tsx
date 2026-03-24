@@ -38,7 +38,7 @@ export default function Navbar() {
   );
 
   const publicLinks = useMemo(
-    () => [
+    (): { to: string; label: string; badge?: number }[] => [
       { to: "/books", label: "Kitoblar" },
       { to: "/map", label: "Xarita" },
     ],
