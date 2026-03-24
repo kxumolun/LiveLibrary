@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String          @id @default(uuid())
+  fullName       String
+  email          String          @unique
+  passwordHash   String
+  avatarUrl      String?
+  bio            String?
+  latitude       Float?
+  longitude      Float?
+  city           String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  ownedBooks     Book[]
+  borrowRequests BorrowRequest[]
+  borrows        Borrow[]
+  notifications  Notification[]
+  sentMessages   Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  phone String? // ← QO'SHING (? — hozircha optional, keyin required qilamiz)
+
+  @@map("users")
+}
+
+model Book {
+  id             String          @id @default(uuid())
+  ownerId        String
+  title          String
+  author         String
+  isbn           String?
+  coverUrl       String?
+  description    String?
+  language       String          @default("uz")
+  condition      BookCondition   @default(GOOD)
+  status         BookStatus      @default(AVAILABLE)
+  latitude       Float?
+  longitude      Float?
+  city           String?
+  availableFrom  DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  meetupLat      Float?
+  meetupLng      Float?
+  meetupLocation String?
+  owner          User            @relation(fields: [ownerId], references: [id])
+  borrowRequests BorrowRequest[]
+  borrows        Borrow[]
+
+  @@map("books")
+}
+
+model BorrowRequest {
+  id           String        @id @default(uuid())
+  bookId       String
+  requesterId  String
+  status       RequestStatus @default(PENDING)
+  durationDays Int
+  message      String?
+  requestedAt  DateTime      @default(now())
+  respondedAt  DateTime?
+  book         Book          @relation(fields: [bookId], references: [id])
+  requester    User          @relation(fields: [requesterId], references: [id])
+  borrow       Borrow?
+
+  @@map("borrow_requests")
+}
+
+model Borrow {
+  id             String        @id @default(uuid())
+  bookId         String
+  borrowerId     String
+  requestId      String        @unique
+  borrowedAt     DateTime      @default(now())
+  dueAt          DateTime
+  returnedAt     DateTime?
+  status         BorrowStatus  @default(PENDING_HANDOVER)
+  handoverExpiry DateTime?
+  handoverOtp    String?
+  returnExpiry   DateTime?
+  returnOtp      String?
+  messages Message[]
+  book           Book          @relation(fields: [bookId], references: [id])
+  borrower       User          @relation(fields: [borrowerId], references: [id])
+  request        BorrowRequest @relation(fields: [requestId], references: [id])
+  chatDeletedBy String[]  @default([])  // ← userId lar ro'yxati
+  chatAutoDeleteAt DateTime?             // ← avtomatik o'chirish vaqti
+
+  @@map("borrows")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+enum BookCondition {
+  NEW
+  GOOD
+  FAIR
+  WORN
+}
+
+enum BookStatus {
+  AVAILABLE
+  BORROWED
+  UNAVAILABLE
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+enum BorrowStatus {
+  PENDING_HANDOVER
+  ACTIVE
+  PENDING_RETURN
+  RETURNED
+  CANCELLED
+  OVERDUE
+}
+
+model Message {
+  id         String    @id @default(uuid())
+  borrowId   String
+  senderId   String
+  receiverId String
+  content    String
+  isRead     Boolean   @default(false)
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  borrow   Borrow @relation(fields: [borrowId], references: [id])
+  sender   User   @relation("SentMessages", fields: [senderId], references: [id])
+  receiver User   @relation("ReceivedMessages", fields: [receiverId], references: [id])
+
+  @@map("messages")
+}
