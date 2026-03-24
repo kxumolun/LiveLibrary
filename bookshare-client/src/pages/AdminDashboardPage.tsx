@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import api from "../api/axios";
@@ -222,14 +222,19 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<"map" | "books" | "stats">("map");
-  const [entered, setEntered] = useState(false);
 
   useEffect(() => {
-    api.get("/admin/dashboard")
-      .then((res) => { setData(res.data); setTimeout(() => setEntered(true), 80); })
-      .catch((err) => setError(err?.response?.status === 403 ? "Sizda admin ruxsati yo'q." : "Xatolik yuz berdi."))
-      .finally(() => setLoading(false));
-  }, []);
+  api.get("/admin/dashboard")
+    .then((res) => { setData(res.data); })
+    .catch((err) =>
+      setError(
+        err?.response?.status === 403
+          ? "Sizda admin ruxsati yo'q."
+          : "Xatolik yuz berdi."
+      )
+    )
+    .finally(() => setLoading(false));
+}, []);
 
   const mapCenter = useMemo<[number, number]>(() => {
     if (!data?.usersMap?.length) return [41.2995, 69.2401];
