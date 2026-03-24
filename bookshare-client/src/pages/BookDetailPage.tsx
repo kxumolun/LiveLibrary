@@ -1,19 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker } from 'react-leaflet';
-import L from 'leaflet';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../api/axios';
 import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
 import CoverImage from "../components/CoverImage";
-
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
+import { meetupIcon, userLocationIcon } from "../utils/mapIcons";
 
 interface Book {
   id: string;
@@ -60,6 +53,7 @@ export default function BookDetailPage() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [requested, setRequested] = useState(false);
+  const [userPosition, setUserPosition] = useState<[number, number] | null>(null);
 
   useEffect(() => {
     api.get(`/books/${id}`).then((res) => setBook(res.data));
@@ -70,6 +64,15 @@ export default function BookDetailPage() {
       });
     }
   }, [id, user]);
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setUserPosition([pos.coords.latitude, pos.coords.longitude]),
+      () => {},
+      { timeout: 5000, maximumAge: 60000 },
+    );
+  }, []);
 
   const handleBorrow = async () => {
     if (!user) { navigate('/login'); return; }
@@ -197,7 +200,12 @@ export default function BookDetailPage() {
                     attribution='&copy; OpenStreetMap'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
-                  <Marker position={[book.meetupLat, book.meetupLng]} />
+                  {userPosition && (
+                    <Marker position={userPosition} icon={userLocationIcon}>
+                      <Popup>Siz shu yerdasiz</Popup>
+                    </Marker>
+                  )}
+                  <Marker position={[book.meetupLat, book.meetupLng]} icon={meetupIcon} />
                 </MapContainer>
               </div>
             </div>

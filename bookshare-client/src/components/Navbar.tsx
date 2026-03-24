@@ -22,19 +22,32 @@ export default function Navbar() {
   const desktopMenuRef = useRef<HTMLDivElement | null>(null);
   const hasSectionAlerts =
     unreadCount > 0 || incomingCount > 0 || ownerPendingCount > 0 || myBorrowsCount > 0;
+  const adminEmails = useMemo(
+    () =>
+      (import.meta.env.VITE_ADMIN_EMAILS || "")
+        .split(",")
+        .map((x: string) => x.trim().toLowerCase())
+        .filter(Boolean),
+    [],
+  );
+  const isAdmin = !!user?.email && adminEmails.includes(user.email.toLowerCase());
 
   const authedLinks = useMemo(
-    () => [
-      { to: "/books", label: "Kitoblar" },
-      { to: "/map", label: "Xarita" },
-      { to: "/my-books", label: "Kitoblarim" },
-      { to: "/my-requests", label: "So'rovlarim" },
-      { to: "/my-borrows", label: "Ijaralarim", badge: myBorrowsCount },
-      { to: "/conversations", label: "Xabarlar", badge: unreadCount },
-      { to: "/incoming", label: "Kelgan so'rovlar", badge: incomingCount },
-      { to: "/owner-borrows", label: "Ijaraga berganlarim", badge: ownerPendingCount },
-    ],
-    [incomingCount, myBorrowsCount, ownerPendingCount, unreadCount],
+    (): { to: string; label: string; badge?: number }[] => {
+      const links = [
+        { to: "/books", label: "Kitoblar" },
+        { to: "/map", label: "Xarita" },
+        { to: "/my-books", label: "Kitoblarim" },
+        { to: "/my-requests", label: "So'rovlarim" },
+        { to: "/my-borrows", label: "Ijaralarim", badge: myBorrowsCount },
+        { to: "/conversations", label: "Xabarlar", badge: unreadCount },
+        { to: "/incoming", label: "Kelgan so'rovlar", badge: incomingCount },
+        { to: "/owner-borrows", label: "Ijaraga berganlarim", badge: ownerPendingCount },
+      ];
+      if (isAdmin) links.push({ to: "/admin", label: "Admin panel" });
+      return links;
+    },
+    [incomingCount, isAdmin, myBorrowsCount, ownerPendingCount, unreadCount],
   );
 
   const publicLinks = useMemo(

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import api from '../api/axios';
 import { useAuthStore } from '../store/authStore';
 
@@ -24,12 +25,16 @@ export default function RegisterPage() {
     }
     setLoading(true);
     setError('');
+    const toastId = toast.loading('Ro\'yxatdan o\'tilmoqda...');
     try {
       const res = await api.post('/auth/register', form);
+      toast.success('Profil yaratildi!', { id: toastId });
       setAuth(res.data.user, res.data.token);
       navigate('/books');
     } catch (err: any) {
-      setError(err?.response?.data?.message || "Ro'yxatdan o'tishda xato");
+      const msg = err?.response?.data?.message || "Ro'yxatdan o'tishda xato";
+      toast.error(msg, { id: toastId });
+      setError(msg);
     } finally {
       setLoading(false);
     }

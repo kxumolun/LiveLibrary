@@ -22,10 +22,8 @@ export default function CoverImage({
 
   return (
     <div
-      className={`relative w-full h-full overflow-hidden bg-surface-100 ${className}`}
+      className={`relative w-full h-full overflow-hidden ${className}`}
     >
-      <div className="absolute inset-0 bg-gradient-to-br from-surface-100 to-surface-50" />
-
       {showImage ? (
         <img
           src={src!}
@@ -33,10 +31,10 @@ export default function CoverImage({
           loading="lazy"
           decoding="async"
           onError={() => setFailed(true)}
-          className={`relative z-10 w-full h-full ${objectClass} object-center`}
+          className={`w-full h-full ${objectClass} object-center`}
         />
       ) : (
-        <div className="relative z-10 w-full h-full flex items-center justify-center">
+        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-surface-100 to-surface-50">
           <div className="flex flex-col items-center gap-2 text-surface-900/50">
             <div className="text-3xl leading-none">📘</div>
             <div className="text-[11px] font-semibold">Muqova yo‘q</div>

@@ -18,6 +18,7 @@ Eng optimal va chidamli variant: **Vercel (frontend)** + **Railway (backend)**.
    | `SUPABASE_URL`    | Supabase project URL        |
    | `SUPABASE_SERVICE_KEY` | Supabase service role key |
    | `CORS_ORIGIN`     | `https://your-app.vercel.app` (keyinroq frontend URL) |
+   | `ADMIN_EMAILS`    | `you@example.com` (faqat admin email) |
    | `PORT`            | `3000` (Railway o‘zi qo‘yadi, ixtiyoriy) |
 
 5. **Deploy** — Railway `npm run build` va `npm start` ni ishga tushiradi.
@@ -34,6 +35,7 @@ Eng optimal va chidamli variant: **Vercel (frontend)** + **Railway (backend)**.
    | O‘zgaruvchi       | Qiymat                                   |
    |-------------------|------------------------------------------|
    | `VITE_API_URL`    | `https://YOUR-RAILWAY-URL/api`           |
+   | `VITE_ADMIN_EMAILS` | `you@example.com` (admin panel ko‘rinishi uchun) |
 
    (Masalan: `https://livelibrary-api.up.railway.app/api`)
 

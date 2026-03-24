@@ -1,17 +1,12 @@
 import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, useMapEvents, Popup } from "react-leaflet";
-import L from "leaflet";
+
 import "leaflet/dist/leaflet.css";
 import api from "../api/axios";
 import toast from "react-hot-toast";
+import { resizeCoverImage } from "../utils/imageResize";
 import CoverImage from "../components/CoverImage";
-
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-});
+import { meetupIcon, userLocationIcon } from "../utils/mapIcons";
 
 interface Book {
   id: string;
@@ -75,13 +70,21 @@ export default function MyBooksPage() {
 
   useEffect(() => {
     if (!showForm) return;
-    const handlePaste = (e: ClipboardEvent) => {
+    const handlePaste = async (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
       if (!items) return;
       for (const item of Array.from(items)) {
         if (item.type.startsWith("image/")) {
           const file = item.getAsFile();
-          if (file) { setCoverFile(file); setCoverPreview(URL.createObjectURL(file)); }
+          if (file) {
+            try {
+              const resized = await resizeCoverImage(file);
+              setCoverFile(resized);
+              setCoverPreview(URL.createObjectURL(resized));
+            } catch {
+              toast.error("Rasm qayta ishlanmadi");
+            }
+          }
           break;
         }
       }
@@ -137,11 +140,14 @@ export default function MyBooksPage() {
 
   const handleCoverUpload = async (bookId: string, file: File) => {
     setUploadingId(bookId);
-    const formData = new FormData();
-    formData.append("file", file);
     try {
+      const resized = await resizeCoverImage(file);
+      const formData = new FormData();
+      formData.append("file", resized);
       const res = await api.post(`/books/${bookId}/cover`, formData, { headers: { "Content-Type": "multipart/form-data" } });
       setBooks((prev) => prev.map((b) => (b.id === bookId ? { ...b, coverUrl: res.data.coverUrl } : b)));
+    } catch {
+      toast.error("Rasm yuklanmadi");
     } finally {
       setUploadingId(null);
     }
@@ -170,14 +176,53 @@ export default function MyBooksPage() {
                 <div className="text-center text-gray-400">
                   <div className="text-4xl mb-2">📷</div>
                   <p className="text-sm font-medium text-gray-500">Kitob muqovasini yuklang</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Iltimos, tik (portret) rasm yuboring. Tavsiya: 3:4 nisbat.
+                  </p>
                   <p className="text-xs text-gray-400 mt-1">Ctrl+V — nusxa qo'ying</p>
                   <p className="text-xs text-gray-400">yoki</p>
                   <p className="text-xs text-blue-500 hover:underline cursor-pointer">Fayldan tanlang</p>
                 </div>
               )}
             </div>
+            {coverPreview && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => document.getElementById("cover-input")?.click()}
+                  className="btn-ghost border border-surface-200 text-sm"
+                >
+                  Almashtirish
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCoverFile(null);
+                    setCoverPreview(null);
+                  }}
+                  className="btn-ghost border border-red-200 text-red-600 text-sm"
+                >
+                  Olib tashlash
+                </button>
+                <span className="text-xs text-surface-900/60">
+                  Rasm avtomatik 3:4 formatga moslanadi.
+                </span>
+              </div>
+            )}
             <input id="cover-input" type="file" accept="image/*" className="hidden"
-              onChange={(e) => { const file = e.target.files?.[0]; if (file) { setCoverFile(file); setCoverPreview(URL.createObjectURL(file)); } }}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  try {
+                    const resized = await resizeCoverImage(file);
+                    setCoverFile(resized);
+                    setCoverPreview(URL.createObjectURL(resized));
+                  } catch {
+                    toast.error("Rasm qayta ishlanmadi");
+                  }
+                }
+                e.target.value = "";
+              }}
             />
             <input placeholder="Kitob nomi" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="w-full border rounded-lg px-4 py-2" required />
             <input placeholder="Muallif" value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} className="w-full border rounded-lg px-4 py-2" required />
@@ -205,8 +250,8 @@ export default function MyBooksPage() {
                 <MapContainer key={`add-${userPosition[0]}-${userPosition[1]}`} center={userPosition} zoom={14} style={{ height: "100%", width: "100%" }}>
                   <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                   <MapPicker onPick={(lat, lng) => setMeetupCoords([lat, lng])} />
-                  <Marker position={userPosition}><Popup>Siz shu yerdasiz</Popup></Marker>
-                  {meetupCoords && <Marker position={meetupCoords}><Popup>Uchrashuv joyi</Popup></Marker>}
+                  <Marker position={userPosition} icon={userLocationIcon}><Popup>Siz shu yerdasiz</Popup></Marker>
+                  {meetupCoords && <Marker position={meetupCoords} icon={meetupIcon}><Popup>Uchrashuv joyi</Popup></Marker>}
                 </MapContainer>
               </div>
               {meetupCoords ? (
@@ -294,8 +339,8 @@ export default function MyBooksPage() {
                         <MapContainer key={`edit-${userPosition[0]}-${userPosition[1]}`} center={userPosition} zoom={14} style={{ height: "100%", width: "100%" }}>
                           <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                           <MapPicker onPick={(lat, lng) => setEditMeetupCoords([lat, lng])} />
-                          <Marker position={userPosition}><Popup>Siz shu yerdasiz</Popup></Marker>
-                          {editMeetupCoords && <Marker position={editMeetupCoords}><Popup>Yangi uchrashuv joyi</Popup></Marker>}
+                          <Marker position={userPosition} icon={userLocationIcon}><Popup>Siz shu yerdasiz</Popup></Marker>
+                          {editMeetupCoords && <Marker position={editMeetupCoords} icon={meetupIcon}><Popup>Yangi uchrashuv joyi</Popup></Marker>}
                         </MapContainer>
                       </div>
                       {editMeetupCoords ? (

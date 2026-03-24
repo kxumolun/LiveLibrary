@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import api from '../api/axios';
 import { useAuthStore } from '../store/authStore';
 
@@ -12,11 +13,15 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    const toastId = toast.loading('Kirilmoqda...');
     try {
       const res = await api.post('/auth/login', { email, password });
+      toast.success('Muvaffaqiyatli!', { id: toastId });
       setAuth(res.data.user, res.data.token);
       navigate('/books');
     } catch {
+      toast.error('Email yoki parol noto\'g\'ri', { id: toastId });
       setError('Email yoki parol noto\'g\'ri');
     }
   };

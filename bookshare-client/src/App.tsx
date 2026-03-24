@@ -16,6 +16,7 @@ import ProfilePage from "./pages/ProfilePage";
 import OwnerBorrowsPage from "./pages/OwnerBorrowsPage";
 import ChatPage from "./pages/ChatPage";
 import ConversationsPage from "./pages/ConversationsPage";
+import AdminDashboardPage from "./pages/AdminDashboardPage";
 
 function App() {
   return (
@@ -38,6 +39,7 @@ function App() {
         <Route path="/owner-borrows" element={<OwnerBorrowsPage />} />
         <Route path="/conversations" element={<ConversationsPage />} />
         <Route path="/chat/:borrowId" element={<ChatPage />} />
+        <Route path="/admin" element={<AdminDashboardPage />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>

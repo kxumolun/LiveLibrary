@@ -1,16 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../api/axios';
-
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
+import CoverImage from '../components/CoverImage';
+import { meetupIcon } from '../utils/mapIcons';
 
 interface Book {
   id: string;
@@ -180,7 +174,7 @@ export default function UserProfilePage() {
                 <MapContainer center={mapCenter} zoom={14} style={{ height: '100%', width: '100%' }}>
                   <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                   {booksWithLocation.map((book) => (
-                    <Marker key={book.id} position={[book.meetupLat!, book.meetupLng!]}>
+                    <Marker key={book.id} position={[book.meetupLat!, book.meetupLng!]} icon={meetupIcon}>
                       <Popup>
                         <div className="min-w-40">
                           <p className="font-bold text-sm">{book.title}</p>
@@ -218,11 +212,7 @@ export default function UserProfilePage() {
               >
                 <div className="flex">
                   <div className="w-24 h-32 bg-gray-200 flex-shrink-0">
-                    {book.coverUrl ? (
-                      <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-2xl">📚</div>
-                    )}
+                    <CoverImage src={book.coverUrl} alt={book.title} fit="cover" />
                   </div>
                   <div className="p-4 flex-1">
                     <h3 className="font-bold">{book.title}</h3>
