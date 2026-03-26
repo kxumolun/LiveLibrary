@@ -14,11 +14,14 @@ Eng optimal va chidamli variant: **Vercel (frontend)** + **Railway (backend)**.
    | O‘zgaruvchi       | Qiymat                      |
    |-------------------|-----------------------------|
    | `DATABASE_URL`    | Supabase PostgreSQL URL     |
+   | `DIRECT_URL`      | Prisma uchun direct connection URL (ko‘pincha `DATABASE_URL` bilan bir xil) |
    | `JWT_SECRET`      | Maxfiy kalit (random)       |
    | `SUPABASE_URL`    | Supabase project URL        |
    | `SUPABASE_SERVICE_KEY` | Supabase service role key |
    | `CORS_ORIGIN`     | `https://your-app.vercel.app` (keyinroq frontend URL) |
    | `ADMIN_EMAILS`    | `you@example.com` (faqat admin email) |
+   | `TELEGRAM_BOT_TOKEN` | Telegram Bot token |
+   | `TELEGRAM_BOT_USERNAME` | Telegram bot username (masalan: yourbot) |
    | `PORT`            | `3000` (Railway o‘zi qo‘yadi, ixtiyoriy) |
 
 5. **Deploy** — Railway `npm run build` va `npm start` ni ishga tushiradi.

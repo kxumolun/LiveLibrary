@@ -13,6 +13,10 @@ interface Profile {
   bio: string | null;
   city: string | null;
   createdAt: string;
+  telegramUsername?: string | null;
+  telegramChatId?: string | number | null;
+  telegramVerifiedAt?: string | null;
+  booksCount?: number;
   ownedBooks?: { id: string }[];
   stats?: {
     givenCount: number;
@@ -31,6 +35,47 @@ const badgeInfo = [
   { icon: '🥇', label: 'Faol', min: 10, max: null, desc: "10 va undan ko'p muvaffaqiyatli almashuvlar" },
 ];
 
+type ProfileStep = { key: string; label: string; done: boolean };
+
+function getProfileCompleteness(profile: Profile) {
+  const steps: ProfileStep[] = [
+    { key: 'fullName', label: "To'liq ism kiritilgan", done: !!profile.fullName?.trim() },
+    { key: 'avatar', label: 'Profil rasmi qo‘yilgan', done: !!profile.avatarUrl },
+    { key: 'phone', label: 'Telefon raqami kiritilgan', done: !!profile.phone?.trim() },
+    { key: 'city', label: 'Shahar tanlangan', done: !!profile.city?.trim() },
+    { key: 'bio', label: "Qisqa bio yozilgan", done: !!profile.bio?.trim() },
+    { key: 'telegram', label: 'Telegram ulangan', done: !!profile.telegramVerifiedAt },
+  ];
+  const doneCount = steps.filter((s) => s.done).length;
+  const percent = Math.round((doneCount / steps.length) * 100);
+  return { steps, doneCount, total: steps.length, percent };
+}
+
+function getCompletenessTone(percent: number) {
+  if (percent < 50) {
+    return {
+      ring: 'ring-red-200',
+      progress: 'bg-red-500',
+      badge: 'bg-red-50 text-red-700 border-red-200',
+      hint: "Profil juda bo‘sh. Ishonchni oshirish uchun to‘ldiring.",
+    };
+  }
+  if (percent < 80) {
+    return {
+      ring: 'ring-amber-200',
+      progress: 'bg-amber-500',
+      badge: 'bg-amber-50 text-amber-700 border-amber-200',
+      hint: 'Yaxshi ketayapti. Yana bir nechta qadam qoldi.',
+    };
+  }
+  return {
+    ring: 'ring-green-200',
+    progress: 'bg-green-500',
+    badge: 'bg-green-50 text-green-700 border-green-200',
+    hint: 'Zo‘r! Profilingiz deyarli to‘liq.',
+  };
+}
+
 export default function ProfilePage() {
   const navigate = useNavigate();
   const { user, setAuth, token } = useAuthStore();
@@ -40,18 +85,23 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [showBadgeInfo, setShowBadgeInfo] = useState(false);
+  const [showProfileTips, setShowProfileTips] = useState(false);
+  const [tgPendingId, setTgPendingId] = useState<string | null>(null);
+  const [tgBotLink, setTgBotLink] = useState<string | null>(null);
+  const [tgCode, setTgCode] = useState('');
+  const [tgBusy, setTgBusy] = useState(false);
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
     Promise.all([
       api.get('/auth/me'),
-      api.get(`/users/${user.id}`),
+      api.get(`/users/${user.id}/summary`),
     ]).then(([meRes, userRes]) => {
       setProfile({
         ...meRes.data,
         stats: userRes.data.stats,
         badge: userRes.data.badge,
-        ownedBooks: userRes.data.ownedBooks,
+        booksCount: userRes.data.booksCount,
       });
       setForm({
         fullName: meRes.data.fullName || '',
@@ -95,11 +145,57 @@ export default function ProfilePage() {
     }
   };
 
+  const initTelegramLink = async () => {
+    setTgBusy(true);
+    try {
+      const res = await api.post('/auth/telegram/link/init');
+      setTgPendingId(res.data.pendingId);
+      setTgBotLink(res.data.botLink);
+      toast.success('Botga kiring va kodni oling');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Telegram ulashni boshlashda xatolik');
+    } finally {
+      setTgBusy(false);
+    }
+  };
+
+  const verifyTelegramLink = async () => {
+    if (!tgPendingId) return;
+    setTgBusy(true);
+    try {
+      await api.post('/auth/telegram/link/verify', {
+        pendingId: tgPendingId,
+        code: tgCode.trim(),
+      });
+      const meRes = await api.get('/auth/me');
+      setProfile((prev) => (prev ? { ...prev, ...meRes.data } : prev));
+      setTgPendingId(null);
+      setTgBotLink(null);
+      setTgCode('');
+      toast.success('Telegram muvaffaqiyatli ulandi');
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || 'Kodni tasdiqlashda xatolik';
+      if (
+        typeof msg === 'string' &&
+        (msg.includes('Tasdiqlash topilmadi') || msg.includes('muddati tugadi'))
+      ) {
+        setTgPendingId(null);
+        setTgBotLink(null);
+      }
+      toast.error(msg);
+    } finally {
+      setTgBusy(false);
+    }
+  };
+
   if (!profile) return (
     <div className="min-h-screen flex items-center justify-center">
       <p className="text-gray-500">Yuklanmoqda...</p>
     </div>
   );
+
+  const completeness = getProfileCompleteness(profile);
+  const tone = getCompletenessTone(completeness.percent);
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
@@ -158,11 +254,51 @@ export default function ProfilePage() {
             </div>
           </div>
 
+          {/* Profile completeness */}
+          <div className={`mb-6 rounded-xl border p-4 ${tone.badge}`}>
+            <button
+              type="button"
+              onClick={() => setShowProfileTips((v) => !v)}
+              className="w-full flex items-start justify-between gap-3 text-left"
+            >
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide">Profil to‘liqligi</p>
+                <p className="text-sm mt-1">{tone.hint}</p>
+              </div>
+              <div className={`h-14 w-14 rounded-full bg-white grid place-items-center ring-4 ${tone.ring}`}>
+                <span className="text-sm font-extrabold">{completeness.percent}%</span>
+              </div>
+            </button>
+            <div className="mt-3 h-2 w-full rounded-full bg-white/80 overflow-hidden">
+              <div
+                className={`h-full ${tone.progress} transition-all duration-300`}
+                style={{ width: `${completeness.percent}%` }}
+              />
+            </div>
+            <p className="text-xs mt-2">
+              {completeness.doneCount}/{completeness.total} qadam bajarilgan
+            </p>
+
+            {showProfileTips && (
+              <div className="mt-3 rounded-lg bg-white/80 p-3 space-y-2">
+                <p className="text-xs font-semibold">100% qilish uchun:</p>
+                {completeness.steps.map((s) => (
+                  <div key={s.key} className="flex items-center gap-2 text-sm">
+                    <span>{s.done ? '✅' : '⬜'}</span>
+                    <span className={s.done ? 'text-gray-500 line-through' : 'text-gray-700'}>
+                      {s.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Stats */}
           {profile.stats && (
             <div className="grid grid-cols-4 gap-4 mb-6 pb-6 border-b">
               <div className="text-center">
-                <p className="text-2xl font-bold text-blue-600">{profile.ownedBooks?.length ?? 0}</p>
+                <p className="text-2xl font-bold text-blue-600">{profile.booksCount ?? 0}</p>
                 <p className="text-xs text-gray-500">Kitob</p>
               </div>
               <div className="text-center">
@@ -189,7 +325,9 @@ export default function ProfilePage() {
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-xs text-gray-500 mb-1">Telefon</p>
                 <p className="font-medium">{profile.phone || '—'}</p>
-                <p className="text-xs text-gray-400 mt-1">Faqat ijara tomonlari ko'ra oladi</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Telefon raqamingizni faqat ijarada siz bilan kelishadigan odam ko‘radi.
+                </p>
               </div>
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-xs text-gray-500 mb-1">Shahar</p>
@@ -198,6 +336,72 @@ export default function ProfilePage() {
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-xs text-gray-500 mb-1">Bio</p>
                 <p className="font-medium">{profile.bio || '—'}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <p className="text-xs text-gray-500 mb-1">Telegram</p>
+                <p className="font-medium">
+                  {profile.telegramVerifiedAt
+                    ? `Ulangan (${profile.telegramUsername ? `@${profile.telegramUsername}` : 'username yo‘q'})`
+                    : 'Ulanmagan'}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Chat ID: {profile.telegramChatId ?? '—'}
+                </p>
+                {profile.telegramVerifiedAt ? (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Tasdiqlangan vaqt: {new Date(profile.telegramVerifiedAt).toLocaleString('uz-UZ')}
+                  </p>
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    {!tgPendingId ? (
+                      <button
+                        onClick={initTelegramLink}
+                        disabled={tgBusy}
+                        className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {tgBusy ? 'Yuklanmoqda...' : 'Telegramni ulash'}
+                      </button>
+                    ) : (
+                      <>
+                        {tgBotLink && (
+                          <a
+                            href={tgBotLink}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-block text-sm text-blue-600 hover:underline"
+                          >
+                            Botga o‘tish
+                          </a>
+                        )}
+                        <div className="flex gap-2">
+                          <input
+                            value={tgCode}
+                            onChange={(e) => setTgCode(e.target.value)}
+                            placeholder="6 xonali kod"
+                            className="w-full border rounded-lg px-3 py-2 text-sm"
+                          />
+                          <button
+                            onClick={verifyTelegramLink}
+                            disabled={tgBusy}
+                            className="px-3 py-2 rounded-lg bg-green-600 text-white text-sm hover:bg-green-700 disabled:opacity-50"
+                          >
+                            {tgBusy ? 'Tasdiqlanmoqda...' : 'Tasdiqlash'}
+                          </button>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setTgPendingId(null);
+                            setTgBotLink(null);
+                            setTgCode('');
+                          }}
+                          className="text-xs text-gray-500 hover:underline"
+                        >
+                          Qaytadan ulashni boshlash
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => setEditing(true)}

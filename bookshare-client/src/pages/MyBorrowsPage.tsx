@@ -49,6 +49,7 @@ export default function MyBorrowsPage() {
 
   useEffect(() => {
     const fetchBorrows = () => {
+      if (document.visibilityState !== "visible") return;
       api.get("/borrows/my-borrows").then((res) => {
         setBorrows((prev) => {
           res.data.forEach((newB: Borrow) => {
@@ -67,7 +68,7 @@ export default function MyBorrowsPage() {
     };
 
     fetchBorrows();
-    const interval = setInterval(fetchBorrows, 10000);
+    const interval = setInterval(fetchBorrows, 20000);
     return () => clearInterval(interval);
   }, []);
 

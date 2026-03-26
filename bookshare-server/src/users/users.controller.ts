@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Query, Param, UseGuards, Request, UseInterceptors, UploadedFile } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Query,
+  Param,
+  UseGuards,
+  Request,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
 import { UsersService } from './users.service';
@@ -32,5 +42,10 @@ export class UsersController {
   @Get(':id')
   getUserProfile(@Param('id') id: string) {
     return this.usersService.getUserProfile(id);
+  }
+
+  @Get(':id/summary')
+  getUserSummary(@Param('id') id: string) {
+    return this.usersService.getUserSummary(id);
   }
 }

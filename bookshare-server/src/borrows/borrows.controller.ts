@@ -66,6 +66,11 @@ export class BorrowsController {
     return this.borrowsService.getOwnerBorrows(req.user.id);
   }
 
+  @Get('navbar-counts')
+  getNavbarCounts(@Request() req) {
+    return this.borrowsService.getNavbarCounts(req.user.id);
+  }
+
   @Patch('request/:id/accept')
   accept(@Param('id') id: string, @Request() req) {
     return this.borrowsService.respond(id, req.user.id, true);

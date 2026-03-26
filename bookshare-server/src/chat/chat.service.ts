@@ -143,22 +143,31 @@ export class ChatService {
       orderBy: { borrowedAt: 'desc' },
     });
 
-    const result = await Promise.all(
-      borrows.map(async (b) => {
-        const unreadCount = await this.prisma.message.count({
-          where: { borrowId: b.id, receiverId: userId, isRead: false },
-        });
-        return {
-          borrowId: b.id,
-          status: b.status,
-          book: b.book,
-          other: b.borrowerId === userId ? b.book.owner : b.borrower,
-          lastMessage: b.messages[0] || null,
-          unreadCount,
-          chatAutoDeleteAt: b.chatAutoDeleteAt,
-        };
-      }),
+    const borrowIds = borrows.map((b) => b.id);
+    const unreadGrouped = borrowIds.length
+      ? await this.prisma.message.groupBy({
+          by: ['borrowId'],
+          where: {
+            borrowId: { in: borrowIds },
+            receiverId: userId,
+            isRead: false,
+          },
+          _count: { _all: true },
+        })
+      : [];
+    const unreadMap = new Map(
+      unreadGrouped.map((x) => [x.borrowId, x._count._all]),
     );
+
+    const result = borrows.map((b) => ({
+      borrowId: b.id,
+      status: b.status,
+      book: b.book,
+      other: b.borrowerId === userId ? b.book.owner : b.borrower,
+      lastMessage: b.messages[0] || null,
+      unreadCount: unreadMap.get(b.id) ?? 0,
+      chatAutoDeleteAt: b.chatAutoDeleteAt,
+    }));
 
     return result;
   }

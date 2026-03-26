@@ -69,9 +69,9 @@ export default function IncomingRequestsPage() {
   return (
     <div className="min-h-[calc(100vh-4rem)] py-6 sm:py-8">
       <div className="container-app">
-        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-6">
-          Kelgan so'rovlar
-        </h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-6">
+            Qabul kutayotgan so'rovlar
+          </h1>
 
         {pageLoading ? (
           <div className="space-y-4">

@@ -50,8 +50,22 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
+    // NOTE: DB migration hali qo'llanmagan bo'lishi mumkin.
+    // Shuning uchun login uchun minimal fieldlarni select qilamiz (yangi columnlar bo'lmasa ham ishlaydi).
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        passwordHash: true,
+        phone: true,
+        city: true,
+        avatarUrl: true,
+        bio: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
     if (!user) throw new UnauthorizedException("Email yoki parol noto'g'ri");
 
@@ -64,7 +78,9 @@ export class AuthService {
   }
 
   async getMe(userId: string) {
-    return this.prisma.user.findUnique({
+    // NOTE: telegram/isBlocked fieldlar DB'da hali bo'lmasligi mumkin (migration pending)
+    // Shuning uchun avval minimal select, keyin mavjud bo'lsa kengaytiramiz.
+    const base = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
@@ -77,6 +93,31 @@ export class AuthService {
         createdAt: true,
       },
     });
+
+    if (!base) return null;
+
+    try {
+      const extra = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          telegramChatId: true,
+          telegramUsername: true,
+          telegramVerifiedAt: true,
+          isBlocked: true,
+        },
+      });
+      if (!extra) return base;
+      return {
+        ...base,
+        ...extra,
+        telegramChatId:
+          typeof extra.telegramChatId === 'bigint'
+            ? extra.telegramChatId.toString()
+            : extra.telegramChatId,
+      };
+    } catch {
+      return base;
+    }
   }
 
   async updateProfile(

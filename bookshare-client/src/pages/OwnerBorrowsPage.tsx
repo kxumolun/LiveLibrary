@@ -83,6 +83,7 @@ export default function OwnerBorrowsPage() {
   const navigate = useNavigate();
 
   const fetchBorrows = useCallback(() => {
+    if (document.visibilityState !== "visible") return;
     api.get("/borrows/owner-borrows").then((res) => {
       setBorrows(res.data);
       const pending = res.data.filter(
@@ -95,7 +96,7 @@ export default function OwnerBorrowsPage() {
 
   useEffect(() => {
     fetchBorrows();
-    const interval = setInterval(fetchBorrows, 10000);
+    const interval = setInterval(fetchBorrows, 20000);
     return () => clearInterval(interval);
   }, [fetchBorrows]);
 

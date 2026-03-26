@@ -66,6 +66,7 @@ export default function BooksPage() {
   const [requestedBooks, setRequestedBooks] = useState<string[]>([]);
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [userLocation, setUserLocation] = useState<{
     lat: number;
     lng: number;
@@ -86,24 +87,53 @@ export default function BooksPage() {
   }, []);
 
   useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
     const fetchData = async () => {
-      setBooksLoading(true); // ← skeleton boshlanadi
-      const [booksRes, requestsRes] = await Promise.all([
-        api.get(`/books${search ? `?search=${search}` : ""}`),
-        user ? api.get("/borrows/my-requests") : Promise.resolve({ data: [] }),
-      ]);
-      setBooks(booksRes.data);
-      setRequestedBooks([]);
-      if (user) {
-        const ids = requestsRes.data
-          .filter((r: any) => r.status === "PENDING")
-          .map((r: any) => r.bookId);
-        setRequestedBooks(ids);
+      const key = `books:list:${debouncedSearch}`;
+      const cachedRaw = sessionStorage.getItem(key);
+      let usedCache = false;
+      if (cachedRaw) {
+        try {
+          const cached = JSON.parse(cachedRaw) as { at: number; data: Book[] };
+          if (Date.now() - cached.at < 60_000) {
+            setBooks(cached.data);
+            setBooksLoading(false);
+            usedCache = true;
+          }
+      } catch (e) {
+        if (import.meta.env.DEV) console.debug("books cache parse failed", e);
       }
-      setBooksLoading(false); // ← skeleton tugaydi
+      }
+      if (!usedCache) setBooksLoading(true);
+      try {
+        const [booksRes, requestsRes] = await Promise.all([
+          api.get(`/books${debouncedSearch ? `?search=${debouncedSearch}` : ""}`),
+          user ? api.get("/borrows/my-requests") : Promise.resolve({ data: [] }),
+        ]);
+        setBooks(booksRes.data);
+        sessionStorage.setItem(
+          key,
+          JSON.stringify({ at: Date.now(), data: booksRes.data }),
+        );
+        setRequestedBooks([]);
+        if (user) {
+          type PendingRequest = { status: string; bookId: string };
+          const pending = requestsRes.data as PendingRequest[];
+          const ids = pending
+            .filter((r) => r.status === "PENDING")
+            .map((r) => r.bookId);
+          setRequestedBooks(ids);
+        }
+      } finally {
+        setBooksLoading(false); // ← skeleton tugaydi
+      }
     };
     fetchData();
-  }, [user, search]);
+  }, [user, debouncedSearch]);
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -128,8 +158,9 @@ export default function BooksPage() {
       setSelectedBook(null);
       setMessage("");
       toast.success("So'rov yuborildi!");
-    } catch (err: any) {
-      const msg = err?.response?.data?.message;
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data
+        ?.message;
       if (msg === "Siz allaqachon so'rov yuborgansiz") {
         setRequestedBooks((prev) => [...prev, selectedBook!.id]);
         setSelectedBook(null);

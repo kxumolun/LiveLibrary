@@ -34,6 +34,7 @@ export default function ChatPage() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [closed, setClosed] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const unreadSyncBusyRef = useRef(false);
 
   useEffect(() => {
     api.get(`/chat/messages/${borrowId}`).then((res) => {
@@ -51,13 +52,24 @@ export default function ChatPage() {
     const s = io(`${base}/chat`, { auth: { token } });
     setSocket(s);
 
+    const syncUnreadCount = async () => {
+      if (unreadSyncBusyRef.current) return;
+      unreadSyncBusyRef.current = true;
+      try {
+        const res = await api.get("/chat/unread");
+        setUnreadCount(res.data);
+      } finally {
+        unreadSyncBusyRef.current = false;
+      }
+    };
+
     s.on("new_message", (msg: Message) => {
       setMessages((prev) => {
         if (prev.find((m) => m.id === msg.id)) return prev;
         return [...prev, msg];
       });
       s.emit("mark_read", { borrowId });
-      api.get("/chat/unread").then((res) => setUnreadCount(res.data));
+      syncUnreadCount();
     });
 
     s.on("message_read", (data: { messageIds: string[]; readAt: string }) => {
@@ -73,7 +85,7 @@ export default function ChatPage() {
     s.on("chat_error", () => setClosed(true));
 
     s.emit("mark_read", { borrowId });
-    api.get("/chat/unread").then((res) => setUnreadCount(res.data));
+    syncUnreadCount();
 
     return () => {
       s.disconnect();

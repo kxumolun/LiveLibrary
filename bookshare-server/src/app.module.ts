@@ -9,6 +9,7 @@ import { UsersModule } from './users/users.module';
 import { CronModule } from './cron/cron.module';
 import { ChatModule } from './chat/chat.module';
 import { AdminModule } from './admin/admin.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { AdminModule } from './admin/admin.module';
     CronModule,
     ChatModule,
     AdminModule,
+    AnalyticsModule,
   ],
 })
 export class AppModule {}

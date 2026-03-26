@@ -5,6 +5,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -17,6 +18,11 @@ model User {
   latitude       Float?
   longitude      Float?
   city           String?
+  isBlocked      Boolean         @default(false)
+  blockedAt      DateTime?
+  telegramChatId BigInt?
+  telegramUsername String?
+  telegramVerifiedAt DateTime?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   ownedBooks     Book[]
@@ -27,6 +33,10 @@ model User {
   receivedMessages Message[] @relation("ReceivedMessages")
   phone String? // ← QO'SHING (? — hozircha optional, keyin required qilamiz)
 
+  @@index([createdAt])
+  @@index([city])
+  @@index([isBlocked])
+  @@index([telegramUsername])
   @@map("users")
 }
 
@@ -41,6 +51,8 @@ model Book {
   language       String          @default("uz")
   condition      BookCondition   @default(GOOD)
   status         BookStatus      @default(AVAILABLE)
+  isHidden       Boolean         @default(false)
+  hiddenAt       DateTime?
   latitude       Float?
   longitude      Float?
   city           String?
@@ -54,6 +66,12 @@ model Book {
   borrowRequests BorrowRequest[]
   borrows        Borrow[]
 
+  @@index([ownerId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([isHidden])
+  @@index([city])
+  @@index([meetupLat, meetupLng])
   @@map("books")
 }
 
@@ -70,6 +88,10 @@ model BorrowRequest {
   requester    User          @relation(fields: [requesterId], references: [id])
   borrow       Borrow?
 
+  @@index([bookId])
+  @@index([requesterId])
+  @@index([status])
+  @@index([requestedAt])
   @@map("borrow_requests")
 }
 
@@ -93,6 +115,10 @@ model Borrow {
   chatDeletedBy String[]  @default([])  // ← userId lar ro'yxati
   chatAutoDeleteAt DateTime?             // ← avtomatik o'chirish vaqti
 
+  @@index([bookId])
+  @@index([borrowerId])
+  @@index([status])
+  @@index([dueAt])
   @@map("borrows")
 }
 
@@ -106,6 +132,9 @@ model Notification {
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id])
 
+  @@index([userId])
+  @@index([userId, isRead])
+  @@index([createdAt])
   @@map("notifications")
 }
 
@@ -152,5 +181,24 @@ model Message {
   sender   User   @relation("SentMessages", fields: [senderId], references: [id])
   receiver User   @relation("ReceivedMessages", fields: [receiverId], references: [id])
 
+  @@index([borrowId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([createdAt])
   @@map("messages")
+}
+
+model VisitEvent {
+  id         String   @id @default(uuid())
+  visitorId  String
+  path       String
+  referrer   String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([visitorId])
+  @@index([path])
+  @@index([visitorId, createdAt])
+  @@map("visit_events")
 }

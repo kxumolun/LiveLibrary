@@ -286,4 +286,39 @@ export class BorrowsService {
       orderBy: { borrowedAt: 'desc' },
     });
   }
+
+  async getNavbarCounts(userId: string) {
+    const [incomingCount, ownerPendingCount, myPendingCount, unreadCount] =
+      await Promise.all([
+        this.prisma.borrowRequest.count({
+          where: {
+            status: 'PENDING',
+            book: { ownerId: userId },
+          },
+        }),
+        this.prisma.borrow.count({
+          where: {
+            book: { ownerId: userId },
+            status: { in: ['PENDING_HANDOVER', 'PENDING_RETURN'] },
+          },
+        }),
+        this.prisma.borrow.count({
+          where: {
+            borrowerId: userId,
+            status: 'PENDING_HANDOVER',
+          },
+        }),
+        this.prisma.message.count({
+          where: { receiverId: userId, isRead: false },
+        }),
+      ]);
+
+    return {
+      incomingCount,
+      ownerPendingCount,
+      myPendingCount,
+      unreadCount,
+      generatedAt: new Date().toISOString(),
+    };
+  }
 }

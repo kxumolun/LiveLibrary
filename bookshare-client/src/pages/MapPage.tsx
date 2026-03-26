@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -55,10 +55,12 @@ function FixLeafletSize() {
 }
 
 export default function MapPage() {
-  const [position, setPosition] = useState<[number, number] | null>(null);
+  const fallbackPosition: [number, number] = [41.2995, 69.2401];
+  const [position, setPosition] = useState<[number, number] | null>(
+    fallbackPosition,
+  );
   const [radius, setRadius] = useState(500);
   const [owners, setOwners] = useState<BookOwner[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedOwner, setSelectedOwner] = useState<BookOwner | null>(null);
   const [borrowBook, setBorrowBook] = useState<Book | null>(null);
   const [duration, setDuration] = useState(7);
@@ -72,39 +74,67 @@ export default function MapPage() {
   const [radiusSheetVisible, setRadiusSheetVisible] = useState(false);
   const [radiusSheetOpen, setRadiusSheetOpen] = useState(false);
 
+  // Location update-ni backendga tez-tez yubormaslik uchun throttling.
+  const lastProfilePatchAtRef = useRef(0);
+  const patchUserLocationThrottled = async (latitude: number, longitude: number) => {
+    if (!user) return;
+    const now = Date.now();
+    if (now - lastProfilePatchAtRef.current < 15_000) return;
+    lastProfilePatchAtRef.current = now;
+    try {
+      await api.patch("/auth/profile", { latitude, longitude });
+    } catch (e) {
+      // Profil location patch xato bo'lsa ham, map ishlashini to'xtatmaymiz.
+      if (import.meta.env.DEV) console.debug("profile patch failed", e);
+    }
+  };
+
   useEffect(() => {
+    // Instant first paint: geolocation hali bo'lmasdan, fallback bo'yicha map va ownersni ko'rsatamiz.
+    fetchOwners(fallbackPosition[0], fallbackPosition[1], radius);
+    if (user) {
+      api.get("/borrows/my-requests").then((res) => {
+        type PendingRequest = { status: string; bookId: string };
+        const pending = res.data as PendingRequest[];
+        const ids = pending.filter((r) => r.status === "PENDING").map((r) => r.bookId);
+        setRequestedBooks(ids);
+      });
+    }
+
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude, longitude } = pos.coords;
         setPosition([latitude, longitude]);
-        if (user) {
-          await api.patch("/auth/profile", { latitude, longitude });
-        }
+        await patchUserLocationThrottled(latitude, longitude);
         fetchOwners(latitude, longitude, radius);
-        if (user) {
-          api.get("/borrows/my-requests").then((res) => {
-            const ids = res.data
-              .filter((r: any) => r.status === "PENDING")
-              .map((r: any) => r.bookId);
-            setRequestedBooks(ids);
-          });
-        }
-        setLoading(false);
       },
       () => {
         setLocationDenied(true);
-        setPosition([41.2995, 69.2401]);
+        setPosition(fallbackPosition);
         fetchOwners(41.2995, 69.2401, radius);
-        setLoading(false);
       },
       { timeout: 5000, enableHighAccuracy: false },
     );
   }, []);
 
   const fetchOwners = async (lat: number, lng: number, rad: number) => {
+    const key = `map:owners:${lat.toFixed(3)}:${lng.toFixed(3)}:${rad}:${user?.id || "guest"}`;
+    const cachedRaw = sessionStorage.getItem(key);
+    if (cachedRaw) {
+      try {
+        const cached = JSON.parse(cachedRaw) as { at: number; data: BookOwner[] };
+        if (Date.now() - cached.at < 45_000) {
+          setOwners(cached.data);
+          return;
+        }
+      } catch (e) {
+        if (import.meta.env.DEV) console.debug("map owners cache parse failed", e);
+      }
+    }
     const userId = user?.id ? `&userId=${user.id}` : "";
     const res = await api.get(`/users/map?lat=${lat}&lng=${lng}&radius=${rad}${userId}`);
     setOwners(res.data);
+    sessionStorage.setItem(key, JSON.stringify({ at: Date.now(), data: res.data }));
   };
 
   const handleRadiusChange = (newRadius: number) => {
@@ -135,14 +165,15 @@ export default function MapPage() {
       setRequestedBooks((prev) => [...prev, borrowBook.id]);
       setBorrowBook(null);
       setMessage("");
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Xato yuz berdi");
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg || "Xato yuz berdi");
     } finally {
       setBorrowLoading(false);
     }
   };
 
-  if (loading) {
+  if (!position) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-gray-500">Joylashuv aniqlanmoqda...</p>
@@ -247,18 +278,15 @@ export default function MapPage() {
             <button
               onClick={() => {
                 setLocationDenied(false);
-                setLoading(true);
                 navigator.geolocation.getCurrentPosition(
                   async (pos) => {
                     const { latitude, longitude } = pos.coords;
                     setPosition([latitude, longitude]);
-                    if (user) await api.patch("/auth/profile", { latitude, longitude });
+                    await patchUserLocationThrottled(latitude, longitude);
                     fetchOwners(latitude, longitude, radius);
-                    setLoading(false);
                   },
                   () => {
                     setLocationDenied(true);
-                    setLoading(false);
                   },
                   { timeout: 5000, enableHighAccuracy: false },
                 );
@@ -290,7 +318,11 @@ export default function MapPage() {
                     <div className="min-w-48">
                       <div
                         className="flex items-center gap-2 mb-2 cursor-pointer hover:opacity-80"
-                        onClick={() => window.location.href = `/users/${owner.id}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          navigate(`/users/${owner.id}`);
+                        }}
                       >
                         <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-bold">
                           {owner.fullName[0]}
@@ -303,7 +335,11 @@ export default function MapPage() {
                           <div key={book.id} className="flex items-center gap-2">
                             <span
                               className="text-xs hover:underline cursor-pointer"
-                              onClick={() => window.location.href = `/books/${book.id}`}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                navigate(`/books/${book.id}`);
+                              }}
                             >
                               {book.title}
                             </span>

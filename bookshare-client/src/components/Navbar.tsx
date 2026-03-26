@@ -41,7 +41,7 @@ export default function Navbar() {
         { to: "/my-requests", label: "So'rovlarim" },
         { to: "/my-borrows", label: "Ijaralarim", badge: myBorrowsCount },
         { to: "/conversations", label: "Xabarlar", badge: unreadCount },
-        { to: "/incoming", label: "Kelgan so'rovlar", badge: incomingCount },
+        { to: "/incoming", label: "Qabul kutayotgan so'rovlar", badge: incomingCount },
         { to: "/owner-borrows", label: "Ijaraga berganlarim", badge: ownerPendingCount },
       ];
       // Admin linkni ro'yxatning yuqorisiga chiqarib, mobile’da ham oson topilsin.
@@ -61,30 +61,31 @@ export default function Navbar() {
 
   useEffect(() => {
     if (!user) return;
-    const fetchCounts = () => {
-      api
-        .get("/borrows/incoming")
-        .then((res) => setIncomingCount(res.data.length));
-      api.get("/borrows/owner-borrows").then((res) => {
-        const pending = res.data.filter(
-          (b: any) =>
-            b.status === "PENDING_HANDOVER" || b.status === "PENDING_RETURN",
-        ).length;
-        setOwnerPendingCount(pending);
-      });
-      api.get("/borrows/my-borrows").then((res) => {
-        const pending = res.data.filter(
-          (b: any) => b.status === "PENDING_HANDOVER",
-        ).length;
-        setMyBorrowsCount(pending);
-      });
-      api.get("/chat/unread").then((res) => {
-        setUnreadCount(res.data);
-      });
+    let busy = false;
+    const fetchCounts = async () => {
+      if (document.visibilityState !== "visible") return;
+      if (busy) return;
+      busy = true;
+      try {
+        const res = await api.get("/borrows/navbar-counts");
+        setIncomingCount(res.data.incomingCount || 0);
+        setOwnerPendingCount(res.data.ownerPendingCount || 0);
+        setMyBorrowsCount(res.data.myPendingCount || 0);
+        setUnreadCount(res.data.unreadCount || 0);
+      } finally {
+        busy = false;
+      }
     };
     fetchCounts();
-    const interval = setInterval(fetchCounts, 10000);
-    return () => clearInterval(interval);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchCounts();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    const interval = setInterval(fetchCounts, 20000);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [user]);
 
   useEffect(() => {
@@ -110,7 +111,7 @@ export default function Navbar() {
             to="/"
             className="text-base sm:text-lg font-extrabold tracking-tight text-primary-700"
           >
-            LiveLibrary
+            Jonli kutubxona
           </Link>
           <div className="hidden md:flex items-center gap-1">
             {(user ? authedLinks : publicLinks).slice(0, 2).map((l) => (

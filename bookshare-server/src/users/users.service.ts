@@ -149,6 +149,46 @@ export class UsersService {
     };
   }
 
+  async getUserSummary(userId: string) {
+    const [user, givenCount, receivedCount, booksCount] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          fullName: true,
+          avatarUrl: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.borrow.count({
+        where: { book: { ownerId: userId }, status: 'RETURNED' },
+      }),
+      this.prisma.borrow.count({
+        where: { borrowerId: userId, status: 'RETURNED' },
+      }),
+      this.prisma.book.count({
+        where: { ownerId: userId },
+      }),
+    ]);
+
+    if (!user) return null;
+
+    const totalScore = givenCount + receivedCount;
+    const badge =
+      totalScore >= 10
+        ? { label: 'Faol', icon: '🥇' }
+        : totalScore >= 3
+          ? { label: 'Ishonchli', icon: '🥈' }
+          : { label: 'Yangi', icon: '🥉' };
+
+    return {
+      ...user,
+      booksCount,
+      stats: { givenCount, receivedCount, totalScore },
+      badge,
+    };
+  }
+
   async uploadAvatar(userId: string, file: Express.Multer.File) {
     const { supabase } = await import('../supabase.js');
 

@@ -39,7 +39,7 @@ export class BooksService {
   }
 
   async findAll(search?: string, lat?: number, lng?: number, radiusKm = 5) {
-    const where: any = {};
+    const where: any = { isHidden: false };
     if (search) {
       where.OR = [
         { title: { contains: search, mode: 'insensitive' } },
@@ -47,15 +47,32 @@ export class BooksService {
       ];
     }
 
-    const books = await this.prisma.book.findMany({
-      where,
-      include: {
-        owner: {
-          select: { id: true, fullName: true, avatarUrl: true, city: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const books = await (async () => {
+      try {
+        return await this.prisma.book.findMany({
+          where,
+          include: {
+            owner: {
+              select: { id: true, fullName: true, avatarUrl: true, city: true },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+      } catch {
+        // migration pending bo'lsa isHidden column yo'q bo'lishi mumkin
+        const fallbackWhere: any = {};
+        if (search) fallbackWhere.OR = where.OR;
+        return await this.prisma.book.findMany({
+          where: fallbackWhere,
+          include: {
+            owner: {
+              select: { id: true, fullName: true, avatarUrl: true, city: true },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+      }
+    })();
 
     let filtered = books;
     if (lat !== undefined && lng !== undefined) {
@@ -103,20 +120,37 @@ export class BooksService {
   }
 
   async findMyBooks(ownerId: string) {
-    return this.prisma.book.findMany({
-      where: { ownerId },
-      include: {
-        borrows: {
-          where: { status: 'ACTIVE' },
-          select: {
-            dueAt: true,
-            borrower: { select: { id: true, fullName: true } },
+    try {
+      return await this.prisma.book.findMany({
+        where: { ownerId, isHidden: false },
+        include: {
+          borrows: {
+            where: { status: 'ACTIVE' },
+            select: {
+              dueAt: true,
+              borrower: { select: { id: true, fullName: true } },
+            },
+            take: 1,
           },
-          take: 1,
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch {
+      return await this.prisma.book.findMany({
+        where: { ownerId },
+        include: {
+          borrows: {
+            where: { status: 'ACTIVE' },
+            select: {
+              dueAt: true,
+              borrower: { select: { id: true, fullName: true } },
+            },
+            take: 1,
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
   }
 
   async uploadCover(id: string, userId: string, file: Express.Multer.File) {
