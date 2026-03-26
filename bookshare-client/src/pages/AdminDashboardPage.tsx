@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import api from "../api/axios";
@@ -496,6 +496,13 @@ export default function AdminDashboardPage() {
   const [tab, setTab] = useState<"map" | "books" | "stats" | "users">("map");
   const [dashboardBusy, setDashboardBusy] = useState(false);
 
+  // Map/Recent/Stats lazy loading: response 0 bo'lib qolsa ham qayta-qayta request ketmasin.
+  const requestedExtraRef = useRef<{ map: boolean; recent: boolean; stats: boolean }>({
+    map: false,
+    recent: false,
+    stats: false,
+  });
+
   const [usersRes, setUsersRes] = useState<AdminUsersResponse | null>(null);
   const [usersQ, setUsersQ] = useState("");
   const [usersBusy, setUsersBusy] = useState(false);
@@ -583,13 +590,26 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     if (tab === "users" && !usersRes && !usersBusy) loadUsers();
     if (tab === "books" && !booksRes && !booksBusy) loadBooks();
-    if (tab === "map" && data && data.usersMap.length === 0 && !dashboardBusy) {
+    if (tab === "map" && data && !requestedExtraRef.current.map && !dashboardBusy) {
+      requestedExtraRef.current.map = true;
       loadDashboard({ includeMap: true });
     }
-    if (tab === "books" && data && data.recentBooks.length === 0 && !dashboardBusy) {
+    if (
+      tab === "books" &&
+      data &&
+      !requestedExtraRef.current.recent &&
+      !dashboardBusy
+    ) {
+      requestedExtraRef.current.recent = true;
       loadDashboard({ includeRecent: true });
     }
-    if (tab === "stats" && data && data.borrowsByStatus.length === 0 && !dashboardBusy) {
+    if (
+      tab === "stats" &&
+      data &&
+      !requestedExtraRef.current.stats &&
+      !dashboardBusy
+    ) {
+      requestedExtraRef.current.stats = true;
       loadDashboard({ includeStats: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

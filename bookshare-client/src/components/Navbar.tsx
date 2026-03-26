@@ -251,25 +251,65 @@ export default function Navbar() {
         <div className="md:hidden border-t border-surface-200/70 bg-white">
           <div className="container-app py-3">
             <div className="grid gap-1">
-              {(user ? authedLinks : publicLinks).map((l) => (
-                <Link
-                  key={l.to}
-                  to={l.to}
-                  onClick={() => setMobileOpen(false)}
-                  className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition ${
-                    location.pathname === l.to
-                      ? "bg-surface-100 text-surface-900"
-                      : "text-surface-900/70 hover:bg-surface-100 hover:text-surface-900"
-                  }`}
-                >
-                  <span>{l.label}</span>
-                  {!!l.badge && l.badge > 0 && (
-                    <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-5 text-white">
-                      {l.badge}
-                    </span>
+              {user ? (
+                <>
+                  {isAdmin && (
+                    <Link
+                      key="__admin"
+                      to="/admin"
+                      onClick={() => setMobileOpen(false)}
+                      className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition ${
+                        location.pathname === "/admin"
+                          ? "bg-surface-100 text-surface-900"
+                          : "text-surface-900/70 hover:bg-surface-100 hover:text-surface-900"
+                      }`}
+                    >
+                      <span>Admin panel</span>
+                    </Link>
                   )}
-                </Link>
-              ))}
+                  {authedLinks
+                    .filter((l) => !isAdmin || l.to !== "/admin")
+                    .map((l) => (
+                      <Link
+                        key={l.to}
+                        to={l.to}
+                        onClick={() => setMobileOpen(false)}
+                        className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition ${
+                          location.pathname === l.to
+                            ? "bg-surface-100 text-surface-900"
+                            : "text-surface-900/70 hover:bg-surface-100 hover:text-surface-900"
+                        }`}
+                      >
+                        <span>{l.label}</span>
+                        {!!l.badge && l.badge > 0 && (
+                          <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-5 text-white">
+                            {l.badge}
+                          </span>
+                        )}
+                      </Link>
+                    ))}
+                </>
+              ) : (
+                publicLinks.map((l) => (
+                  <Link
+                    key={l.to}
+                    to={l.to}
+                    onClick={() => setMobileOpen(false)}
+                    className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition ${
+                      location.pathname === l.to
+                        ? "bg-surface-100 text-surface-900"
+                        : "text-surface-900/70 hover:bg-surface-100 hover:text-surface-900"
+                    }`}
+                  >
+                    <span>{l.label}</span>
+                    {!!l.badge && l.badge > 0 && (
+                      <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-5 text-white">
+                        {l.badge}
+                      </span>
+                    )}
+                  </Link>
+                ))
+              )}
             </div>
 
             <div className="mt-3 grid gap-2 border-t border-surface-200/70 pt-3">
