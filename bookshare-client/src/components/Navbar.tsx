@@ -44,7 +44,8 @@ export default function Navbar() {
         { to: "/incoming", label: "Kelgan so'rovlar", badge: incomingCount },
         { to: "/owner-borrows", label: "Ijaraga berganlarim", badge: ownerPendingCount },
       ];
-      if (isAdmin) links.push({ to: "/admin", label: "Admin panel" });
+      // Admin linkni ro'yxatning yuqorisiga chiqarib, mobile’da ham oson topilsin.
+      if (isAdmin) links.splice(2, 0, { to: "/admin", label: "Admin panel" });
       return links;
     },
     [incomingCount, isAdmin, myBorrowsCount, ownerPendingCount, unreadCount],
