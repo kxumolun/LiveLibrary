@@ -23,5 +23,6 @@ import { PrismaModule } from '../prisma/prisma.module';
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, TelegramOtpService],
+  exports: [TelegramOtpService],
 })
 export class AuthModule {}

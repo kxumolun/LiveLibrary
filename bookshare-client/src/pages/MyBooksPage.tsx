@@ -7,6 +7,8 @@ import toast from "react-hot-toast";
 import { resizeCoverImage } from "../utils/imageResize";
 import CoverImage from "../components/CoverImage";
 import { meetupIcon, userLocationIcon } from "../utils/mapIcons";
+import LocationPermissionHelpModal from "../components/LocationPermissionHelpModal";
+import PremiumSelect from "../components/PremiumSelect";
 
 interface Book {
   id: string;
@@ -48,6 +50,9 @@ export default function MyBooksPage() {
   const [form, setForm] = useState({ title: "", author: "", description: "", city: "", language: "uz", condition: "GOOD", meetupLocation: "" });
   const [meetupCoords, setMeetupCoords] = useState<[number, number] | null>(null);
   const [userPosition, setUserPosition] = useState<[number, number]>([41.2995, 69.2401]);
+  const [locationDenied, setLocationDenied] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [showPermissionHelp, setShowPermissionHelp] = useState(false);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
@@ -56,16 +61,55 @@ export default function MyBooksPage() {
   const [editForm, setEditForm] = useState({ description: "", condition: "GOOD", meetupLocation: "", city: "" });
   const [editMeetupCoords, setEditMeetupCoords] = useState<[number, number] | null>(null);
 
+  const retryDetectLocation = async (): Promise<boolean> => {
+    if (!navigator.geolocation) {
+      setLocationDenied(true);
+      toast.error("Qurilmada geolokatsiya mavjud emas");
+      return false;
+    }
+    setLocating(true);
+
+    const runGeo = () =>
+      new Promise<boolean>((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            setUserPosition([pos.coords.latitude, pos.coords.longitude]);
+            setLocationDenied(false);
+            setLocating(false);
+            resolve(true);
+          },
+          () => {
+            setLocationDenied(true);
+            setLocating(false);
+            resolve(false);
+          },
+          { timeout: 9000, enableHighAccuracy: true, maximumAge: 0 },
+        );
+      });
+
+    if (navigator.permissions?.query) {
+      return navigator.permissions
+        .query({ name: "geolocation" })
+        .then(async (perm) => {
+          if (perm.state === "denied") {
+            setLocationDenied(true);
+            setLocating(false);
+            setShowPermissionHelp(true);
+            return false;
+          }
+          return runGeo();
+        })
+        .catch(async () => runGeo());
+    }
+    return runGeo();
+  };
+
   useEffect(() => {
     api.get("/books/my").then((res) => {
       setBooks(res.data);
       setPageLoading(false);
     });
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setUserPosition([pos.coords.latitude, pos.coords.longitude]),
-      () => {},
-      { timeout: 5000 },
-    );
+    void retryDetectLocation();
   }, []);
 
   useEffect(() => {
@@ -163,15 +207,29 @@ export default function MyBooksPage() {
           </button>
         </div>
 
+        <div className="mb-6 bg-surface-0 border border-primary-100 rounded-xl p-4">
+          <p className="text-sm font-extrabold text-surface-900">Eslatma</p>
+          <p className="text-sm text-surface-900/70 mt-1">
+            “Kitoblar” sahifasida sizning kitoblaringiz yashirilgan bo‘ladi. U yerda boshqa foydalanuvchilarning kitoblari turadi.
+            Siz o‘z kitoblaringizni shu sahifada ko‘rasiz va boshqarasiz.
+          </p>
+        </div>
+
         {showForm && (
           <form onSubmit={handleAdd} className="bg-white rounded-xl shadow p-6 mb-8 space-y-4">
             <h2 className="text-xl font-bold">Yangi kitob</h2>
             <div
-              className="w-full h-48 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center cursor-pointer hover:border-blue-400 transition overflow-hidden"
+              className="w-full min-h-48 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center cursor-pointer hover:border-blue-400 transition overflow-hidden p-3"
               onClick={() => document.getElementById("cover-input")?.click()}
             >
               {coverPreview ? (
-                <img src={coverPreview} alt="preview" className="h-full object-contain" />
+                <div className="w-full max-w-[260px] sm:max-w-[320px] aspect-[3/4] rounded-lg overflow-hidden bg-surface-50">
+                  <img
+                    src={coverPreview}
+                    alt="preview"
+                    className="w-full h-full object-cover object-center block"
+                  />
+                </div>
               ) : (
                 <div className="text-center text-gray-400">
                   <div className="text-4xl mb-2">📷</div>
@@ -231,21 +289,51 @@ export default function MyBooksPage() {
               <textarea placeholder="Tavsif" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="w-full border rounded-lg px-4 py-2" rows={3} maxLength={1000} />
               <p className={`text-xs mt-1 text-right ${form.description.length > 900 ? "text-red-500" : "text-gray-400"}`}>{form.description.length}/1000</p>
             </div>
-            <select value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value })} className="w-full border rounded-lg px-4 py-2">
-              <option value="uz">O'zbek</option>
-              <option value="ru">Rus</option>
-              <option value="en">Ingliz</option>
-            </select>
-            <select value={form.condition} onChange={(e) => setForm({ ...form, condition: e.target.value })} className="w-full border rounded-lg px-4 py-2">
-              <option value="NEW">Yangi</option>
-              <option value="GOOD">Yaxshi</option>
-              <option value="FAIR">O'rtacha</option>
-              <option value="WORN">Eskirgan</option>
-            </select>
+            <PremiumSelect
+              value={form.language}
+              onChange={(v) => setForm({ ...form, language: v })}
+              options={[
+                { value: "uz", label: "O'zbek" },
+                { value: "ru", label: "Rus" },
+                { value: "en", label: "Ingliz" },
+              ]}
+            />
+            <PremiumSelect
+              value={form.condition}
+              onChange={(v) => setForm({ ...form, condition: v })}
+              options={[
+                { value: "NEW", label: "Yangi" },
+                { value: "GOOD", label: "Yaxshi" },
+                { value: "FAIR", label: "O'rtacha" },
+                { value: "WORN", label: "Eskirgan" },
+              ]}
+            />
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-1">Uchrashuv joyi <span className="text-red-500">*</span></label>
               <input placeholder="Masalan: Chilonzor metro yonida" value={form.meetupLocation} onChange={(e) => setForm({ ...form, meetupLocation: e.target.value })} className="w-full border rounded-lg px-4 py-2 mb-2" />
               <p className="text-xs text-gray-500 mb-2">📍 Xaritadan uchrashuv joyini belgilang (uyingizni emas, umumiy joy tanlang)</p>
+              {locationDenied && (
+                <div className="mb-2 bg-yellow-50 border border-yellow-200 text-yellow-700 px-3 py-2 rounded-lg text-xs flex items-center justify-between">
+                  <span>Joylashuvingiz aniqlanmadi — markaziy nuqta ko'rsatilmoqda.</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowPermissionHelp(true)}
+                      className="bg-white text-yellow-800 border border-yellow-300 px-2 py-1 rounded-md hover:bg-yellow-100"
+                    >
+                      Yordam
+                    </button>
+                    <button
+                      type="button"
+                      onClick={retryDetectLocation}
+                      disabled={locating}
+                      className="bg-yellow-500 text-white px-2.5 py-1 rounded-md hover:bg-yellow-600 disabled:opacity-50"
+                    >
+                      {locating ? "..." : "Qayta urinish"}
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="rounded-xl overflow-hidden border" style={{ height: "250px" }}>
                 <MapContainer key={`add-${userPosition[0]}-${userPosition[1]}`} center={userPosition} zoom={14} style={{ height: "100%", width: "100%" }}>
                   <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
@@ -277,9 +365,9 @@ export default function MyBooksPage() {
           <div className="space-y-4">
             {books.map((book) => (
               <div key={book.id} className="bg-white rounded-xl shadow overflow-hidden">
-                <div className="flex">
+                  <div className="grid grid-cols-[120px_1fr] sm:grid-cols-[150px_1fr] gap-4 items-stretch">
                   <div
-                    className="w-32 h-40 bg-gray-200 flex-shrink-0 relative cursor-pointer group"
+                      className="w-full bg-gray-200 aspect-[3/4] flex-shrink-0 relative cursor-pointer group overflow-hidden"
                     onClick={() => {
                       const input = document.createElement("input");
                       input.type = "file";
@@ -302,19 +390,47 @@ export default function MyBooksPage() {
                     )}
                     <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition" />
                   </div>
-                  <div className="p-4 flex-1 flex justify-between items-start">
-                    <div>
-                      <h2 className="text-lg font-bold">{book.title}</h2>
-                      <p className="text-gray-600">{book.author}</p>
-                      <p className="text-sm text-gray-500">{book.city}</p>
-                      {book.meetupLocation && <p className="text-xs text-blue-600 mt-1">📍 {book.meetupLocation}</p>}
+                  <div className="p-4 min-w-0 flex flex-col justify-between">
+                    <div className="min-w-0">
+                      <h2 className="text-lg font-bold break-words">{book.title}</h2>
+                      <p className="text-gray-600 break-words">{book.author}</p>
+                      <p className="text-sm text-gray-500 break-words">{book.city}</p>
+                      {book.meetupLocation && <p className="text-xs text-blue-600 mt-1 break-words">📍 {book.meetupLocation}</p>}
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className={`text-sm px-3 py-1 rounded-full ${book.status === "AVAILABLE" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                    <div className="mt-4 flex items-center justify-between gap-3">
+                      <span
+                        className={`text-sm px-3 py-1 rounded-full ${
+                          book.status === "AVAILABLE"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-700"
+                        } w-fit`}
+                      >
                         {book.status === "AVAILABLE" ? "Mavjud" : "Ijarada"}
                       </span>
-                      <button onClick={() => { setEditingBook(book); setEditMeetupCoords(null); setEditForm({ description: book.description || "", condition: book.condition || "GOOD", meetupLocation: book.meetupLocation || "", city: book.city || "" }); }} className="text-blue-500 hover:underline text-sm">Tahrirlash</button>
-                      <button onClick={() => handleDelete(book.id)} className="text-red-500 hover:underline text-sm">O'chirish</button>
+
+                      <div className="flex flex-col items-end gap-1.5">
+                        <button
+                          onClick={() => {
+                            setEditingBook(book);
+                            setEditMeetupCoords(null);
+                            setEditForm({
+                              description: book.description || "",
+                              condition: book.condition || "GOOD",
+                              meetupLocation: book.meetupLocation || "",
+                              city: book.city || "",
+                            });
+                          }}
+                          className="text-blue-600 hover:underline text-sm font-semibold whitespace-nowrap"
+                        >
+                          Tahrirlash
+                        </button>
+                        <button
+                          onClick={() => handleDelete(book.id)}
+                          className="text-red-600 hover:underline text-sm font-semibold whitespace-nowrap"
+                        >
+                          O'chirish
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -326,15 +442,41 @@ export default function MyBooksPage() {
                       <textarea placeholder="Tavsif" value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} className="w-full border rounded-lg px-4 py-2 text-sm" rows={2} maxLength={1000} />
                       <p className={`text-xs mt-1 text-right ${editForm.description.length > 900 ? "text-red-500" : "text-gray-400"}`}>{editForm.description.length}/1000</p>
                     </div>
-                    <select value={editForm.condition} onChange={(e) => setEditForm({ ...editForm, condition: e.target.value })} className="w-full border rounded-lg px-4 py-2 text-sm">
-                      <option value="NEW">Yangi</option>
-                      <option value="GOOD">Yaxshi</option>
-                      <option value="FAIR">O'rtacha</option>
-                      <option value="WORN">Eskirgan</option>
-                    </select>
+                    <PremiumSelect
+                      value={editForm.condition}
+                      onChange={(v) => setEditForm({ ...editForm, condition: v })}
+                      options={[
+                        { value: "NEW", label: "Yangi" },
+                        { value: "GOOD", label: "Yaxshi" },
+                        { value: "FAIR", label: "O'rtacha" },
+                        { value: "WORN", label: "Eskirgan" },
+                      ]}
+                    />
                     <input placeholder="Uchrashuv joyi (matn)" value={editForm.meetupLocation} onChange={(e) => setEditForm({ ...editForm, meetupLocation: e.target.value })} className="w-full border rounded-lg px-4 py-2 text-sm" />
                     <div>
                       <p className="text-xs text-gray-500 mb-2">📍 Xaritadan uchrashuv joyini belgilang</p>
+                      {locationDenied && (
+                        <div className="mb-2 bg-yellow-50 border border-yellow-200 text-yellow-700 px-3 py-2 rounded-lg text-xs flex items-center justify-between">
+                          <span>Joylashuv aniqlanmadi — markaziy nuqta ko'rsatilmoqda.</span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setShowPermissionHelp(true)}
+                              className="bg-white text-yellow-800 border border-yellow-300 px-2 py-1 rounded-md hover:bg-yellow-100"
+                            >
+                              Yordam
+                            </button>
+                            <button
+                              type="button"
+                              onClick={retryDetectLocation}
+                              disabled={locating}
+                              className="bg-yellow-500 text-white px-2.5 py-1 rounded-md hover:bg-yellow-600 disabled:opacity-50"
+                            >
+                              {locating ? "..." : "Qayta urinish"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       <div className="rounded-xl overflow-hidden border" style={{ height: "220px" }}>
                         <MapContainer key={`edit-${userPosition[0]}-${userPosition[1]}`} center={userPosition} zoom={14} style={{ height: "100%", width: "100%" }}>
                           <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
@@ -360,6 +502,11 @@ export default function MyBooksPage() {
           </div>
         )}
       </div>
+      <LocationPermissionHelpModal
+        open={showPermissionHelp}
+        onClose={() => setShowPermissionHelp(false)}
+        onRetry={retryDetectLocation}
+      />
     </div>
   );
 }

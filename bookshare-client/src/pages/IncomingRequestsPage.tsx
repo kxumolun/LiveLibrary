@@ -70,7 +70,7 @@ export default function IncomingRequestsPage() {
     <div className="min-h-[calc(100vh-4rem)] py-6 sm:py-8">
       <div className="container-app">
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-6">
-            Qabul kutayotgan so'rovlar
+            Menga kelgan so'rovlar
           </h1>
 
         {pageLoading ? (

@@ -110,6 +110,20 @@ export class TelegramOtpService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  async sendToUserById(userId: string, text: string) {
+    if (!this.botToken) return { ok: false as const, reason: 'bot_not_configured' };
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { telegramChatId: true },
+    });
+    if (!user?.telegramChatId) return { ok: false as const, reason: 'chat_not_linked' };
+
+    const chatId = Number(user.telegramChatId);
+    if (!Number.isFinite(chatId)) return { ok: false as const, reason: 'invalid_chat_id' };
+    await this.sendMessage(chatId, text);
+    return { ok: true as const };
+  }
+
   private async pollOnce() {
     if (!this.botToken) return;
 

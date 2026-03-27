@@ -15,6 +15,7 @@ import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import CoverImage from "../components/CoverImage";
 import { ownerIcon, userLocationIcon } from "../utils/mapIcons";
+import LocationPermissionHelpModal from "../components/LocationPermissionHelpModal";
 
 
 interface Book {
@@ -70,9 +71,59 @@ export default function MapPage() {
   const navigate = useNavigate();
   const [requestedBooks, setRequestedBooks] = useState<string[]>([]);
   const [locationDenied, setLocationDenied] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [showPermissionHelp, setShowPermissionHelp] = useState(false);
   const radiusOptions = [100, 300, 500, 1000, 2000, 5000];
   const [radiusSheetVisible, setRadiusSheetVisible] = useState(false);
   const [radiusSheetOpen, setRadiusSheetOpen] = useState(false);
+
+  const requestCurrentLocation = async (): Promise<boolean> => {
+    if (!navigator.geolocation) {
+      setLocationDenied(true);
+      toast.error("Qurilmada geolokatsiya mavjud emas");
+      return false;
+    }
+
+    setLocating(true);
+    const runGeo = () =>
+      new Promise<boolean>((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const { latitude, longitude } = pos.coords;
+            setPosition([latitude, longitude]);
+            setLocationDenied(false);
+            await patchUserLocationThrottled(latitude, longitude);
+            fetchOwners(latitude, longitude, radius);
+            setLocating(false);
+            resolve(true);
+          },
+          () => {
+            setLocationDenied(true);
+            setPosition(fallbackPosition);
+            fetchOwners(fallbackPosition[0], fallbackPosition[1], radius);
+            setLocating(false);
+            resolve(false);
+          },
+          { timeout: 9000, enableHighAccuracy: true, maximumAge: 0 },
+        );
+      });
+
+    if (navigator.permissions?.query) {
+      return navigator.permissions
+        .query({ name: "geolocation" })
+        .then(async (perm) => {
+          if (perm.state === "denied") {
+            setLocationDenied(true);
+            setLocating(false);
+            setShowPermissionHelp(true);
+            return false;
+          }
+          return runGeo();
+        })
+        .catch(async () => runGeo());
+    }
+    return runGeo();
+  };
 
   // Location update-ni backendga tez-tez yubormaslik uchun throttling.
   const lastProfilePatchAtRef = useRef(0);
@@ -100,21 +151,7 @@ export default function MapPage() {
         setRequestedBooks(ids);
       });
     }
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude, longitude } = pos.coords;
-        setPosition([latitude, longitude]);
-        await patchUserLocationThrottled(latitude, longitude);
-        fetchOwners(latitude, longitude, radius);
-      },
-      () => {
-        setLocationDenied(true);
-        setPosition(fallbackPosition);
-        fetchOwners(41.2995, 69.2401, radius);
-      },
-      { timeout: 5000, enableHighAccuracy: false },
-    );
+    void requestCurrentLocation();
   }, []);
 
   const fetchOwners = async (lat: number, lng: number, rad: number) => {
@@ -275,26 +312,21 @@ export default function MapPage() {
         {locationDenied && (
           <div className="mb-4 bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-lg text-sm flex justify-between items-center">
             <span>⚠️ Joylashuvingiz aniqlanmadi — Toshkent markazi ko'rsatilmoqda</span>
-            <button
-              onClick={() => {
-                setLocationDenied(false);
-                navigator.geolocation.getCurrentPosition(
-                  async (pos) => {
-                    const { latitude, longitude } = pos.coords;
-                    setPosition([latitude, longitude]);
-                    await patchUserLocationThrottled(latitude, longitude);
-                    fetchOwners(latitude, longitude, radius);
-                  },
-                  () => {
-                    setLocationDenied(true);
-                  },
-                  { timeout: 5000, enableHighAccuracy: false },
-                );
-              }}
-              className="bg-yellow-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-yellow-600"
-            >
-              Qayta urinish
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowPermissionHelp(true)}
+                className="bg-white text-yellow-800 border border-yellow-300 px-3 py-1 rounded-lg text-xs hover:bg-yellow-100"
+              >
+                Qanday yoqiladi?
+              </button>
+              <button
+                onClick={requestCurrentLocation}
+                disabled={locating}
+                className="bg-yellow-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-yellow-600 disabled:opacity-50"
+              >
+                {locating ? "Aniqlanmoqda..." : "Qayta urinish"}
+              </button>
+            </div>
           </div>
         )}
 
@@ -529,6 +561,12 @@ export default function MapPage() {
           </div>
         </div>
       )}
+
+      <LocationPermissionHelpModal
+        open={showPermissionHelp}
+        onClose={() => setShowPermissionHelp(false)}
+        onRetry={requestCurrentLocation}
+      />
     </div>
   );
 }

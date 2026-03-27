@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Get,
   Headers,
   Post,
 } from '@nestjs/common';
@@ -10,6 +11,11 @@ import { AnalyticsService } from './analytics.service';
 @Controller('analytics')
 export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
+
+  @Get('public-stats')
+  getPublicStats() {
+    return this.analytics.getPublicStats();
+  }
 
   @Post('visit')
   trackVisit(

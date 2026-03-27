@@ -54,7 +54,7 @@ export default function MyRequestsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
-      <h1 className="text-3xl font-bold mb-8">Mening so'rovlarim</h1>
+      <h1 className="text-3xl font-bold mb-8">Yuborgan so'rovlarim</h1>
 
       {pageLoading ? (
         <div className="space-y-4">
@@ -65,22 +65,22 @@ export default function MyRequestsPage() {
       ) : (
         <div className="space-y-4">
           {requests.map((req) => (
-            <div key={req.id} className="bg-white rounded-xl shadow overflow-hidden flex">
-              <div className="w-24 h-32 bg-gray-200 flex-shrink-0">
+            <div key={req.id} className="bg-white rounded-xl shadow overflow-hidden flex flex-col sm:flex-row">
+              <div className="w-24 sm:w-24 aspect-[3/4] bg-gray-200 flex-shrink-0 overflow-hidden">
                 {req.book.coverUrl ? (
                   <img src={req.book.coverUrl} alt={req.book.title} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-2xl">📚</div>
                 )}
               </div>
-              <div className="p-4 flex-1 flex justify-between items-center">
-                <div>
-                  <h2 className="text-lg font-bold">{req.book.title}</h2>
-                  <p className="text-gray-600">{req.book.author}</p>
-                  <p className="text-sm text-gray-500">Egasi: {req.book.owner.fullName}</p>
+              <div className="p-4 flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-lg font-bold break-words">{req.book.title}</h2>
+                  <p className="text-gray-600 break-words">{req.book.author}</p>
+                  <p className="text-sm text-gray-500 break-words">Egasi: {req.book.owner.fullName}</p>
                   <p className="text-sm text-gray-500">{req.durationDays} kun</p>
                 </div>
-                <span className={`text-sm px-3 py-1 rounded-full ${statusColor[req.status]}`}>
+                <span className={`text-sm px-3 py-1 rounded-full w-fit ${statusColor[req.status]}`}>
                   {statusLabel[req.status]}
                 </span>
               </div>

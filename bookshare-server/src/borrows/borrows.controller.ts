@@ -31,6 +31,25 @@ class OtpDto {
   otp: string;
 }
 
+class OverdueReasonDto {
+  @IsString()
+  reason: string;
+}
+
+class RequestExtensionDto {
+  @IsString()
+  reason: string;
+
+  @IsNumber()
+  @Min(1)
+  @Max(30)
+  extraDays: number;
+}
+
+class RespondExtensionDto {
+  accept: boolean;
+}
+
 @Controller('borrows')
 @UseGuards(AuthGuard('jwt'))
 export class BorrowsController {
@@ -98,5 +117,37 @@ export class BorrowsController {
   @Patch(':id/confirm-return')
   confirmReturn(@Param('id') id: string, @Request() req, @Body() dto: OtpDto) {
     return this.borrowsService.confirmReturn(id, req.user.id, dto.otp);
+  }
+
+  @Patch(':id/overdue-reason')
+  submitOverdueReason(
+    @Param('id') id: string,
+    @Request() req,
+    @Body() dto: OverdueReasonDto,
+  ) {
+    return this.borrowsService.submitOverdueReason(id, req.user.id, dto.reason);
+  }
+
+  @Patch(':id/request-extension')
+  requestExtension(
+    @Param('id') id: string,
+    @Request() req,
+    @Body() dto: RequestExtensionDto,
+  ) {
+    return this.borrowsService.requestExtension(
+      id,
+      req.user.id,
+      dto.reason,
+      dto.extraDays,
+    );
+  }
+
+  @Patch(':id/respond-extension')
+  respondExtension(
+    @Param('id') id: string,
+    @Request() req,
+    @Body() dto: RespondExtensionDto,
+  ) {
+    return this.borrowsService.respondExtension(id, req.user.id, !!dto.accept);
   }
 }

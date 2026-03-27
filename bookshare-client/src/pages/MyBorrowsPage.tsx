@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import toast from "react-hot-toast";
+import PremiumSelect from "../components/PremiumSelect";
 
 interface Borrow {
   id: string;
@@ -11,6 +12,13 @@ interface Borrow {
   returnedAt: string | null;
   handoverOtp: string | null;
   returnOtp: string | null;
+  overdueReason: string | null;
+  overdueReasonSentAt: string | null;
+  extensionStatus: "PENDING" | "ACCEPTED" | "REJECTED" | null;
+  extensionReason: string | null;
+  extensionDays: number | null;
+  extensionRequestedAt: string | null;
+  extensionRespondedAt: string | null;
   book: {
     id: string;
     title: string;
@@ -43,8 +51,12 @@ function BorrowCardSkeleton() {
 export default function MyBorrowsPage() {
   const [borrows, setBorrows] = useState<Borrow[]>([]);
   const [otpInputs, setOtpInputs] = useState<Record<string, string>>({});
+  const [reasonInputs, setReasonInputs] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [pageLoading, setPageLoading] = useState(true);
+  const [extendModalBorrowId, setExtendModalBorrowId] = useState<string | null>(null);
+  const [extendReason, setExtendReason] = useState("");
+  const [extendDays, setExtendDays] = useState(3);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -72,9 +84,23 @@ export default function MyBorrowsPage() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const nearDue = borrows.find((b) => {
+      if (b.status !== "ACTIVE") return false;
+      if (b.extensionStatus === "PENDING") return false;
+      const remainMs = new Date(b.dueAt).getTime() - Date.now();
+      return remainMs > 0 && remainMs <= 48 * 60 * 60 * 1000;
+    });
+    if (!nearDue) return;
+    const key = `borrow:extend-prompt:${nearDue.id}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+    setExtendModalBorrowId(nearDue.id);
+  }, [borrows]);
+
   const handleConfirmHandover = async (id: string) => {
     const otp = otpInputs[id];
-    if (!otp) { toast.error("OTP kodni kiriting"); return; }
+    if (!otp) { toast.error("Tasdiqlash kodini kiriting"); return; }
     setLoading((prev) => ({ ...prev, [id]: true }));
     try {
       await api.patch(`/borrows/${id}/handover`, { otp });
@@ -104,6 +130,72 @@ export default function MyBorrowsPage() {
     } finally {
       setLoading((prev) => ({ ...prev, [id]: false }));
     }
+  };
+
+  const handleSubmitOverdueReason = async (id: string) => {
+    const reason = (reasonInputs[id] || "").trim();
+    if (reason.length < 10) {
+      toast.error("Sababni kamida 10 ta belgi bilan yozing");
+      return;
+    }
+    setLoading((prev) => ({ ...prev, [id]: true }));
+    try {
+      await api.patch(`/borrows/${id}/overdue-reason`, { reason });
+      toast.success("Sabab egasiga yuborildi");
+      setBorrows((prev) =>
+        prev.map((b) =>
+          b.id === id
+            ? { ...b, overdueReason: reason, overdueReasonSentAt: new Date().toISOString() }
+            : b
+        )
+      );
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Sabab yuborilmadi");
+    } finally {
+      setLoading((prev) => ({ ...prev, [id]: false }));
+    }
+  };
+
+  const handleRequestExtension = async (id: string) => {
+    const reason = extendReason.trim();
+    if (reason.length < 10) {
+      toast.error("Sababni kamida 10 ta belgi bilan yozing");
+      return;
+    }
+    setLoading((prev) => ({ ...prev, [id]: true }));
+    try {
+      await api.patch(`/borrows/${id}/request-extension`, {
+        reason,
+        extraDays: extendDays,
+      });
+      toast.success("Uzatish so'rovi yuborildi");
+      setBorrows((prev) =>
+        prev.map((b) =>
+          b.id === id
+            ? {
+                ...b,
+                extensionStatus: "PENDING",
+                extensionReason: reason,
+                extensionDays: extendDays,
+                extensionRequestedAt: new Date().toISOString(),
+              }
+            : b
+        )
+      );
+      setExtendModalBorrowId(null);
+      setExtendReason("");
+      setExtendDays(3);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "So'rov yuborilmadi");
+    } finally {
+      setLoading((prev) => ({ ...prev, [id]: false }));
+    }
+  };
+
+  const isDueSoon = (borrow: Borrow) => {
+    if (borrow.status !== "ACTIVE") return false;
+    const remainMs = new Date(borrow.dueAt).getTime() - Date.now();
+    return remainMs > 0 && remainMs <= 48 * 60 * 60 * 1000;
   };
 
   const formatDate = (date: string) =>
@@ -147,8 +239,8 @@ export default function MyBorrowsPage() {
           <div className="space-y-4">
             {borrows.map((borrow) => (
               <div key={borrow.id} className="bg-white rounded-xl shadow overflow-hidden">
-                <div className="flex">
-                  <div className="w-24 h-32 bg-gray-200 flex-shrink-0">
+                <div className="flex flex-col sm:flex-row">
+                  <div className="w-24 sm:w-24 aspect-[3/4] bg-gray-200 flex-shrink-0 overflow-hidden">
                     {borrow.book.coverUrl ? (
                       <img src={borrow.book.coverUrl} alt={borrow.book.title} className="w-full h-full object-cover" />
                     ) : (
@@ -156,8 +248,8 @@ export default function MyBorrowsPage() {
                     )}
                   </div>
                   <div className="p-4 flex-1">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-2">
+                      <div className="min-w-0">
                         <h2 className="text-lg font-bold">{borrow.book.title}</h2>
                         <p className="text-gray-600">{borrow.book.author}</p>
                         <p className="text-sm text-gray-500 mt-1">Egasi: {borrow.book.owner.fullName}</p>
@@ -192,10 +284,13 @@ export default function MyBorrowsPage() {
                     {borrow.status === "PENDING_HANDOVER" && (
                       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 space-y-2 mt-2">
                         <p className="text-sm text-yellow-700 font-medium">Kitobni qabul qilish</p>
-                        <p className="text-xs text-yellow-600">Kitob egasining kodini kiriting:</p>
+                        <p className="text-xs text-yellow-600">Uchrashuvda kitob egasi aytgan tasdiqlash kodini kiriting:</p>
+                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">
+                          ℹ️ Kodni boshqa odamlarga aytmang. Tasdiqlashni o'zingiz bajaring.
+                        </p>
                         <div className="flex gap-2">
                           <input
-                            placeholder="OTP kodni kiriting"
+                            placeholder="Tasdiqlash kodini kiriting"
                             value={otpInputs[borrow.id] || ""}
                             onChange={(e) =>
                               setOtpInputs((prev) => ({ ...prev, [borrow.id]: e.target.value.toUpperCase() }))
@@ -216,10 +311,79 @@ export default function MyBorrowsPage() {
 
                     {(borrow.status === "ACTIVE" || borrow.status === "OVERDUE") && (
                       <div className="mt-2 space-y-2">
+                        {isDueSoon(borrow) && borrow.extensionStatus !== "PENDING" && (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <p className="text-sm text-blue-700 font-medium">
+                              ⏰ Qaytarish muddati yaqinlashmoqda
+                            </p>
+                            <p className="text-xs text-blue-600 mt-1">
+                              O'qib tugatmagan bo'lsangiz, sabab yozib muddatni uzaytirish so'rovini yuboring.
+                            </p>
+                            <button
+                              onClick={() => setExtendModalBorrowId(borrow.id)}
+                              className="mt-2 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-blue-700"
+                            >
+                              Muddatni uzaytirish so'rovi
+                            </button>
+                          </div>
+                        )}
+
+                        {borrow.extensionStatus === "PENDING" && (
+                          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                            <p className="text-sm text-indigo-700 font-medium">
+                              Uzaytirish so'rovi yuborilgan
+                            </p>
+                            <p className="text-xs text-indigo-600 mt-1">
+                              {borrow.extensionDays} kun so'ralgan. Owner javobini kuting.
+                            </p>
+                          </div>
+                        )}
+                        {borrow.extensionStatus === "ACCEPTED" && (
+                          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                            <p className="text-sm text-green-700 font-medium">
+                              ✅ Muddat uzaytirildi
+                            </p>
+                            <p className="text-xs text-green-600 mt-1">
+                              So'rovingiz qabul qilindi: {borrow.extensionDays} kun.
+                            </p>
+                          </div>
+                        )}
+                        {borrow.extensionStatus === "REJECTED" && (
+                          <div className="bg-rose-50 border border-rose-200 rounded-lg p-3">
+                            <p className="text-sm text-rose-700 font-medium">
+                              ❌ Uzaytirish so'rovi rad etildi
+                            </p>
+                            <p className="text-xs text-rose-600 mt-1">
+                              Iltimos, kitobni belgilangan muddatda qaytaring.
+                            </p>
+                          </div>
+                        )}
+
                         {borrow.status === "OVERDUE" && (
                           <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                             <p className="text-sm text-red-700 font-medium">⚠️ Qaytarish muddati o'tib ketdi!</p>
                             <p className="text-xs text-red-600 mt-1">Iltimos, kitobni tezda qaytaring.</p>
+                            <div className="mt-3 space-y-2">
+                              <label className="text-xs text-red-700 font-medium">
+                                Kechikish sababini egasiga yuboring
+                              </label>
+                              <textarea
+                                rows={2}
+                                placeholder="Masalan: safardaman, falon sanada qaytaraman..."
+                                value={reasonInputs[borrow.id] ?? borrow.overdueReason ?? ""}
+                                onChange={(e) =>
+                                  setReasonInputs((prev) => ({ ...prev, [borrow.id]: e.target.value }))
+                                }
+                                className="w-full border border-red-200 rounded-lg px-3 py-2 text-sm"
+                              />
+                              <button
+                                onClick={() => handleSubmitOverdueReason(borrow.id)}
+                                disabled={loading[borrow.id]}
+                                className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-50"
+                              >
+                                {loading[borrow.id] ? "Yuborilmoqda..." : "Sababni yuborish"}
+                              </button>
+                            </div>
                           </div>
                         )}
                         <button
@@ -234,9 +398,11 @@ export default function MyBorrowsPage() {
 
                     {borrow.status === "PENDING_RETURN" && borrow.returnOtp && (
                       <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-2">
-                        <p className="text-sm text-orange-700 font-medium mb-1">Sizning qaytarish kodingiz:</p>
+                        <p className="text-sm text-orange-700 font-medium mb-1">Sizning qaytarish tasdiqlash kodingiz:</p>
                         <p className="text-2xl font-mono font-bold text-orange-800 tracking-widest">{borrow.returnOtp}</p>
-                        <p className="text-xs text-orange-600 mt-1">Bu kodni kitob egasiga bering — u tasdiqlash uchun ishlatadi</p>
+                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1 mt-2">
+                          ℹ️ Bu kodni xabarda yubormang. Uchrashuvda egasi kodni sizning telefoningizdan kiritsin.
+                        </p>
                       </div>
                     )}
                   </div>
@@ -246,6 +412,65 @@ export default function MyBorrowsPage() {
           </div>
         )}
       </div>
+
+      {extendModalBorrowId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md p-5">
+            <h3 className="text-lg font-extrabold text-slate-900">
+              Muddatni uzaytirish so'rovi
+            </h3>
+            <p className="text-sm text-slate-600 mt-1">
+              O'qib tugatmagan bo'lsangiz, sababini yozing. Owner ko'rib qabul yoki rad qiladi.
+            </p>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="text-sm text-slate-700">Necha kunga?</label>
+                <div className="mt-1">
+                  <PremiumSelect
+                    value={extendDays}
+                    onChange={(v) => setExtendDays(v)}
+                    options={[
+                      { value: 3, label: "3 kun" },
+                      { value: 5, label: "5 kun" },
+                      { value: 7, label: "7 kun" },
+                      { value: 10, label: "10 kun" },
+                    ]}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-sm text-slate-700">Sabab</label>
+                <textarea
+                  rows={3}
+                  value={extendReason}
+                  onChange={(e) => setExtendReason(e.target.value)}
+                  placeholder="Masalan: safardaman, falon sanada topshiraman..."
+                  className="w-full border rounded-lg px-3 py-2 mt-1"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setExtendModalBorrowId(null);
+                    setExtendReason("");
+                    setExtendDays(3);
+                  }}
+                  className="flex-1 border rounded-lg py-2 hover:bg-gray-50"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  onClick={() => handleRequestExtension(extendModalBorrowId)}
+                  disabled={loading[extendModalBorrowId]}
+                  className="flex-1 bg-blue-600 text-white rounded-lg py-2 hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {loading[extendModalBorrowId] ? "Yuborilmoqda..." : "So'rov yuborish"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

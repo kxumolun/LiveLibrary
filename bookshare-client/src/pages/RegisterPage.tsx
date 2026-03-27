@@ -11,34 +11,89 @@ export default function RegisterPage() {
     fullName: '',
     email: '',
     password: '',
+    confirmPassword: '',
     phone: '',
     city: '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof typeof form, string>>>({});
 
   const [step, setStep] = useState<'form' | 'code'>('form');
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [botLink, setBotLink] = useState<string | null>(null);
   const [code, setCode] = useState('');
+  const [codeError, setCodeError] = useState('');
+
+  const normalizePhone = (value: string) => {
+    let cleaned = value.replace(/[^\d+]/g, '');
+    if (cleaned.startsWith('998')) cleaned = `+${cleaned}`;
+    if (!cleaned.startsWith('+') && cleaned.length > 0) cleaned = `+${cleaned}`;
+    return cleaned;
+  };
+
+  const validateForm = () => {
+    const errors: Partial<Record<keyof typeof form, string>> = {};
+    const fullName = form.fullName.trim().replace(/\s+/g, ' ');
+    const email = form.email.trim().toLowerCase();
+    const phone = normalizePhone(form.phone.trim());
+    const password = form.password;
+    const city = form.city.trim();
+
+    if (!fullName || fullName.length < 2 || fullName.length > 60) {
+      errors.fullName = "Ism 2-60 belgi oralig'ida bo'lishi kerak";
+    } else if (!/^[A-Za-zÀ-ÖØ-öø-ÿА-Яа-яЁёʻ’'`\-\s]+$/.test(fullName)) {
+      errors.fullName = "Ismda faqat harflar va bo'shliq bo'lishi mumkin";
+    }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.email = "Email noto'g'ri formatda";
+    }
+    if (!/^\+998\d{9}$/.test(phone)) {
+      errors.phone = "Telefon formati: +998901234567";
+    }
+    if (city.length > 80) {
+      errors.city = "Shahar nomi 80 belgidan oshmasin";
+    }
+    if (password.length < 8 || password.length > 72) {
+      errors.password = "Parol 8-72 belgi bo'lishi kerak";
+    } else if (!/(?=.*[A-Za-z])(?=.*\d)/.test(password)) {
+      errors.password = "Parolda kamida 1 ta harf va 1 ta raqam bo'lishi kerak";
+    }
+    if (form.confirmPassword !== password) {
+      errors.confirmPassword = 'Parollar mos emas';
+    }
+
+    setFieldErrors(errors);
+    return { ok: Object.keys(errors).length === 0, fullName, email, phone, city };
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.phone.trim()) {
-      setError("Telefon raqami majburiy");
+    const checked = validateForm();
+    if (!checked.ok) {
+      setError("Iltimos, formadagi xatolarni to'g'rilang");
       return;
     }
     setLoading(true);
     setError('');
     const toastId = toast.loading('Ro\'yxatdan o\'tilmoqda...');
     try {
-      const res = await api.post('/auth/register/telegram/init', form);
+      const payload = {
+        fullName: checked.fullName,
+        email: checked.email,
+        password: form.password,
+        phone: checked.phone,
+        city: checked.city || undefined,
+      };
+      const res = await api.post('/auth/register/telegram/init', payload);
       toast.success('Telegram tasdiqlashi boshlandi!', { id: toastId });
       setPendingId(res.data.pendingId);
       setBotLink(res.data.botLink);
       setStep('code');
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || "Ro'yxatdan o'tishda xato";
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Ro'yxatdan o'tishda xato";
       toast.error(msg, { id: toastId });
       setError(msg);
     } finally {
@@ -70,10 +125,15 @@ export default function RegisterPage() {
                     type="text"
                     placeholder="Ism Familiya"
                     value={form.fullName}
-                    onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, fullName: e.target.value })
+                    }
                     className="input"
                     required
                   />
+                  {fieldErrors.fullName && (
+                    <p className="text-xs text-red-600 mt-1">{fieldErrors.fullName}</p>
+                  )}
                 </div>
                 <div>
                   <label className="text-sm text-gray-600 block mb-1">Email</label>
@@ -85,6 +145,9 @@ export default function RegisterPage() {
                     className="input"
                     required
                   />
+                  {fieldErrors.email && (
+                    <p className="text-xs text-red-600 mt-1">{fieldErrors.email}</p>
+                  )}
                 </div>
                 <div>
                   <label className="text-sm text-gray-600 block mb-1">
@@ -94,10 +157,15 @@ export default function RegisterPage() {
                     type="tel"
                     placeholder="+998 90 123 45 67"
                     value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, phone: normalizePhone(e.target.value) })
+                    }
                     className="input"
                     required
                   />
+                  {fieldErrors.phone && (
+                    <p className="text-xs text-red-600 mt-1">{fieldErrors.phone}</p>
+                  )}
                   <p className="text-xs text-gray-400 mt-1">
                     Telegram botga kirganda telefon raqamingizni yuborasiz.
                   </p>
@@ -113,18 +181,38 @@ export default function RegisterPage() {
                     onChange={(e) => setForm({ ...form, city: e.target.value })}
                     className="input"
                   />
+                  {fieldErrors.city && (
+                    <p className="text-xs text-red-600 mt-1">{fieldErrors.city}</p>
+                  )}
                 </div>
                 <div>
                   <label className="text-sm text-gray-600 block mb-1">Parol</label>
                   <input
                     type="password"
-                    placeholder="Kamida 6 ta belgi"
+                    placeholder="8+ belgi, harf va raqam"
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
                     className="input"
                     required
-                    minLength={6}
+                    minLength={8}
                   />
+                  {fieldErrors.password && (
+                    <p className="text-xs text-red-600 mt-1">{fieldErrors.password}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600 block mb-1">Parolni tasdiqlash</label>
+                  <input
+                    type="password"
+                    placeholder="Parolni qayta kiriting"
+                    value={form.confirmPassword}
+                    onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+                    className="input"
+                    required
+                  />
+                  {fieldErrors.confirmPassword && (
+                    <p className="text-xs text-red-600 mt-1">{fieldErrors.confirmPassword}</p>
+                  )}
                 </div>
                 <button
                   type="submit"
@@ -168,9 +256,14 @@ export default function RegisterPage() {
                     inputMode="numeric"
                     placeholder="Masalan: 123456"
                     value={code}
-                    onChange={(e) => setCode(e.target.value)}
+                    onChange={(e) => {
+                      const next = e.target.value.replace(/[^\d]/g, '').slice(0, 6);
+                      setCode(next);
+                      setCodeError('');
+                    }}
                     className="input"
                   />
+                  {codeError && <p className="text-xs text-red-600 mt-1">{codeError}</p>}
                 </div>
 
                 {error && (
@@ -184,6 +277,10 @@ export default function RegisterPage() {
                   disabled={loading || !pendingId}
                   onClick={async () => {
                     if (!pendingId) return;
+                    if (!/^\d{6}$/.test(code.trim())) {
+                      setCodeError("Kod 6 ta raqam bo'lishi kerak");
+                      return;
+                    }
                     setError('');
                     setLoading(true);
                     const toastId = toast.loading('Kod tekshirilmoqda...');
@@ -195,8 +292,10 @@ export default function RegisterPage() {
                       toast.success('Tasdiqlandi!', { id: toastId });
                       setAuth(res.data.user, res.data.token);
                       navigate('/books');
-                    } catch (err: any) {
-                      const msg = err?.response?.data?.message || 'Kod xato yoki muddati tugagan';
+                    } catch (err: unknown) {
+                      const msg =
+                        (err as { response?: { data?: { message?: string } } })?.response?.data
+                          ?.message || 'Kod xato yoki muddati tugagan';
                       toast.error(msg, { id: toastId });
                       setError(msg);
                     } finally {

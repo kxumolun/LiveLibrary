@@ -38,10 +38,10 @@ export default function Navbar() {
         { to: "/books", label: "Kitoblar" },
         { to: "/map", label: "Xarita" },
         { to: "/my-books", label: "Kitoblarim" },
-        { to: "/my-requests", label: "So'rovlarim" },
+        { to: "/my-requests", label: "Yuborgan so'rovlarim" },
         { to: "/my-borrows", label: "Ijaralarim", badge: myBorrowsCount },
         { to: "/conversations", label: "Xabarlar", badge: unreadCount },
-        { to: "/incoming", label: "Qabul kutayotgan so'rovlar", badge: incomingCount },
+        { to: "/incoming", label: "Menga kelgan so'rovlar", badge: incomingCount },
         { to: "/owner-borrows", label: "Ijaraga berganlarim", badge: ownerPendingCount },
       ];
       // Admin linkni ro'yxatning yuqorisiga chiqarib, mobile’da ham oson topilsin.

@@ -108,6 +108,16 @@ model Borrow {
   handoverOtp    String?
   returnExpiry   DateTime?
   returnOtp      String?
+  overdueReason  String?
+  overdueReasonSentAt DateTime?
+  overdueReminderSentAt DateTime?
+  dueSoonReminderSentAt DateTime?
+  extensionStatus ExtensionRequestStatus?
+  extensionReason String?
+  extensionDays Int?
+  extensionRequestedAt DateTime?
+  extensionRespondedAt DateTime?
+  extensionCount Int @default(0)
   messages Message[]
   book           Book          @relation(fields: [bookId], references: [id])
   borrower       User          @relation(fields: [borrowerId], references: [id])
@@ -165,6 +175,12 @@ enum BorrowStatus {
   RETURNED
   CANCELLED
   OVERDUE
+}
+
+enum ExtensionRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
 }
 
 model Message {

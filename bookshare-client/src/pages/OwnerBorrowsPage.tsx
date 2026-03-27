@@ -11,6 +11,11 @@ interface Borrow {
   dueAt: string;
   handoverOtp: string | null;
   handoverExpiry: string | null;
+  extensionStatus: "PENDING" | "ACCEPTED" | "REJECTED" | null;
+  extensionReason: string | null;
+  extensionDays: number | null;
+  extensionRequestedAt: string | null;
+  extensionRespondedAt: string | null;
   book: {
     id: string;
     title: string;
@@ -87,7 +92,10 @@ export default function OwnerBorrowsPage() {
     api.get("/borrows/owner-borrows").then((res) => {
       setBorrows(res.data);
       const pending = res.data.filter(
-        (b: any) => b.status === "PENDING_HANDOVER" || b.status === "PENDING_RETURN"
+        (b: any) =>
+          b.status === "PENDING_HANDOVER" ||
+          b.status === "PENDING_RETURN" ||
+          b.extensionStatus === "PENDING"
       ).length;
       setOwnerPendingCount(pending);
       setPageLoading(false);
@@ -102,7 +110,7 @@ export default function OwnerBorrowsPage() {
 
   const handleConfirmReturn = async (borrowId: string) => {
     const otp = otpInputs[borrowId];
-    if (!otp) { toast.error("OTP kodni kiriting"); return; }
+    if (!otp) { toast.error("Tasdiqlash kodini kiriting"); return; }
     setLoading((prev) => ({ ...prev, [borrowId]: true }));
     try {
       await api.patch(`/borrows/${borrowId}/confirm-return`, { otp });
@@ -110,13 +118,44 @@ export default function OwnerBorrowsPage() {
       setBorrows((prev) => {
         const updated = prev.filter((b) => b.id !== borrowId);
         const pending = updated.filter(
-          (b) => b.status === "PENDING_HANDOVER" || b.status === "PENDING_RETURN"
+          (b) =>
+            b.status === "PENDING_HANDOVER" ||
+            b.status === "PENDING_RETURN" ||
+            b.extensionStatus === "PENDING"
         ).length;
         setOwnerPendingCount(pending);
         return updated;
       });
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Xato yuz berdi");
+    } finally {
+      setLoading((prev) => ({ ...prev, [borrowId]: false }));
+    }
+  };
+
+  const handleRespondExtension = async (borrowId: string, accept: boolean) => {
+    setLoading((prev) => ({ ...prev, [borrowId]: true }));
+    try {
+      const res = await api.patch(`/borrows/${borrowId}/respond-extension`, { accept });
+      toast.success(accept ? "So'rov qabul qilindi" : "So'rov rad etildi");
+      setBorrows((prev) =>
+        prev.map((b) =>
+          b.id === borrowId
+            ? {
+                ...b,
+                extensionStatus: accept ? "ACCEPTED" : "REJECTED",
+                extensionRespondedAt: new Date().toISOString(),
+                dueAt: accept && res?.data?.dueAt ? res.data.dueAt : b.dueAt,
+                status:
+                  accept && new Date(res?.data?.dueAt || b.dueAt) > new Date()
+                    ? "ACTIVE"
+                    : b.status,
+              }
+            : b
+        )
+      );
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Javob yuborilmadi");
     } finally {
       setLoading((prev) => ({ ...prev, [borrowId]: false }));
     }
@@ -151,8 +190,8 @@ export default function OwnerBorrowsPage() {
           <div className="space-y-4">
             {borrows.map((borrow) => (
               <div key={borrow.id} className="bg-white rounded-xl shadow overflow-hidden">
-                <div className="flex">
-                  <div className="w-24 h-32 bg-gray-200 flex-shrink-0">
+                <div className="flex flex-col sm:flex-row">
+                  <div className="w-24 sm:w-24 aspect-[3/4] bg-gray-200 flex-shrink-0 overflow-hidden">
                     {borrow.book.coverUrl ? (
                       <img src={borrow.book.coverUrl} alt={borrow.book.title} className="w-full h-full object-cover" />
                     ) : (
@@ -160,8 +199,8 @@ export default function OwnerBorrowsPage() {
                     )}
                   </div>
                   <div className="p-4 flex-1">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+                      <div className="min-w-0">
                         <h2 className="text-lg font-bold">{borrow.book.title}</h2>
                         <p className="text-gray-600 text-sm">{borrow.book.author}</p>
                         <p className="text-sm text-gray-500 mt-1">
@@ -199,7 +238,7 @@ export default function OwnerBorrowsPage() {
                     {borrow.status === "PENDING_HANDOVER" && (
                       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 space-y-2">
                         <div className="flex justify-between items-center">
-                          <p className="text-sm text-yellow-700 font-medium">Sizning tasdiqlash kodingiz:</p>
+                          <p className="text-sm text-yellow-700 font-medium">Sizning topshirish tasdiqlash kodingiz:</p>
                           {borrow.handoverExpiry && (
                             <Timer
                               expiry={borrow.handoverExpiry}
@@ -213,7 +252,9 @@ export default function OwnerBorrowsPage() {
                         <p className="text-2xl font-mono font-bold text-yellow-800 tracking-widest">
                           {borrow.handoverOtp}
                         </p>
-                        <p className="text-xs text-yellow-600">Bu kodni oluvchiga bering — u o'z akkountida kiritadi</p>
+                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">
+                          ℹ️ Kodni xabarda yubormang. Uchrashuvda oluvchining telefonida o'zingiz kiriting.
+                        </p>
                       </div>
                     )}
 
@@ -222,6 +263,53 @@ export default function OwnerBorrowsPage() {
                         <p className="text-sm text-blue-700">
                           Kitob ijarada — qaytarish sanasi:{" "}
                           <span className="font-medium">{new Date(borrow.dueAt).toLocaleDateString("uz-UZ")}</span>
+                        </p>
+                      </div>
+                    )}
+
+                    {borrow.extensionStatus === "PENDING" && (
+                      <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 space-y-2">
+                        <p className="text-sm text-indigo-700 font-medium">
+                          Muddat uzaytirish so'rovi keldi
+                        </p>
+                        <p className="text-xs text-indigo-600">
+                          So'ralgan muddat: <span className="font-semibold">{borrow.extensionDays} kun</span>
+                        </p>
+                        {borrow.extensionReason && (
+                          <p className="text-xs text-indigo-700">
+                            Sabab: "{borrow.extensionReason}"
+                          </p>
+                        )}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleRespondExtension(borrow.id, false)}
+                            disabled={loading[borrow.id]}
+                            className="flex-1 border border-rose-200 text-rose-700 rounded-lg py-1.5 text-sm hover:bg-rose-50 disabled:opacity-50"
+                          >
+                            Rad etish
+                          </button>
+                          <button
+                            onClick={() => handleRespondExtension(borrow.id, true)}
+                            disabled={loading[borrow.id]}
+                            className="flex-1 bg-indigo-600 text-white rounded-lg py-1.5 text-sm hover:bg-indigo-700 disabled:opacity-50"
+                          >
+                            Qabul qilish
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {borrow.extensionStatus === "ACCEPTED" && (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                        <p className="text-sm text-green-700 font-medium">
+                          Uzaytirish so'rovi qabul qilingan ({borrow.extensionDays} kun)
+                        </p>
+                      </div>
+                    )}
+                    {borrow.extensionStatus === "REJECTED" && (
+                      <div className="bg-rose-50 border border-rose-200 rounded-lg p-3">
+                        <p className="text-sm text-rose-700 font-medium">
+                          Uzaytirish so'rovi rad etilgan
                         </p>
                       </div>
                     )}
@@ -246,10 +334,13 @@ export default function OwnerBorrowsPage() {
                     {borrow.status === "PENDING_RETURN" && (
                       <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 space-y-2">
                         <p className="text-sm text-orange-700 font-medium">Oluvchi kitobni qaytarmoqchi</p>
-                        <p className="text-xs text-orange-600">Oluvchining kodini kiriting:</p>
+                        <p className="text-xs text-orange-600">Uchrashuvda oluvchining tasdiqlash kodini kiriting:</p>
+                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">
+                          ℹ️ Kodni oldindan so'ramang. Uchrashuvda oluvchining akkauntidan o'zingiz kiriting.
+                        </p>
                         <div className="flex gap-2">
                           <input
-                            placeholder="OTP kodni kiriting"
+                            placeholder="Tasdiqlash kodini kiriting"
                             value={otpInputs[borrow.id] || ""}
                             onChange={(e) =>
                               setOtpInputs((prev) => ({ ...prev, [borrow.id]: e.target.value.toUpperCase() }))

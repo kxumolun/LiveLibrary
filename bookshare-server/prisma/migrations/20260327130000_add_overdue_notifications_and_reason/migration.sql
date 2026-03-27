@@ -1,0 +1,4 @@
+ALTER TABLE "borrows"
+ADD COLUMN IF NOT EXISTS "overdueReason" TEXT,
+ADD COLUMN IF NOT EXISTS "overdueReasonSentAt" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "overdueReminderSentAt" TIMESTAMP(3);

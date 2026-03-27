@@ -18,8 +18,13 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
+    const normalizedEmail = dto.email.trim().toLowerCase();
+    const normalizedFullName = dto.fullName.trim().replace(/\s+/g, ' ');
+    const normalizedPhone = dto.phone.trim();
+    const normalizedCity = dto.city?.trim() || null;
+
     const existing = await this.prisma.user.findUnique({
-      where: { email: dto.email },
+      where: { email: normalizedEmail },
     });
     if (existing)
       throw new ConflictException("Bu email allaqachon ro'yxatdan o'tgan");
@@ -28,11 +33,11 @@ export class AuthService {
 
     const user = await this.prisma.user.create({
       data: {
-        fullName: dto.fullName,
-        email: dto.email,
+        fullName: normalizedFullName,
+        email: normalizedEmail,
         passwordHash,
-        phone: dto.phone,
-        city: dto.city,
+        phone: normalizedPhone,
+        city: normalizedCity,
       },
       select: {
         id: true,
@@ -50,10 +55,11 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
+    const normalizedEmail = dto.email.trim().toLowerCase();
     // NOTE: DB migration hali qo'llanmagan bo'lishi mumkin.
     // Shuning uchun login uchun minimal fieldlarni select qilamiz (yangi columnlar bo'lmasa ham ishlaydi).
     const user = await this.prisma.user.findUnique({
-      where: { email: dto.email },
+      where: { email: normalizedEmail },
       select: {
         id: true,
         fullName: true,

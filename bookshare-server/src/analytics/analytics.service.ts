@@ -38,4 +38,23 @@ export class AnalyticsService {
 
     return { ok: true };
   }
+
+  async getPublicStats() {
+    const [activeBooks, users, completedBorrows] = await Promise.all([
+      this.prisma.book.count({
+        where: { status: 'AVAILABLE', isHidden: false },
+      }),
+      this.prisma.user.count(),
+      this.prisma.borrow.count({
+        where: { status: 'RETURNED' },
+      }),
+    ]);
+
+    return {
+      activeBooks,
+      users,
+      completedBorrows,
+      generatedAt: new Date().toISOString(),
+    };
+  }
 }
