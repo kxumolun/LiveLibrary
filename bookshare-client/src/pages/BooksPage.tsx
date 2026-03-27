@@ -144,7 +144,6 @@ export default function BooksPage() {
   }, []);
 
   const filteredBooks = books.filter((book) => book.owner.id !== user?.id);
-  const myBooksCount = user ? books.filter((book) => book.owner.id === user.id).length : 0;
 
   const handleBorrow = async () => {
     if (!selectedBook) return;
