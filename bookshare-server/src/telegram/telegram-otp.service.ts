@@ -209,7 +209,7 @@ export class TelegramOtpService implements OnModuleInit, OnModuleDestroy {
 
         await this.sendMessage(
           chatId,
-          'Bu tasdiqlash havolasi eskirib qolgan yoki topilmadi.\n\nIltimos, ilovaga qayting va Telegram tasdiqlashni qayta boshlang (yangi havola ochiladi).',
+          'Bu havola endi ishlamaydi.\n\nIltimos, ilovaga qayting va Telegram tasdiqlashni qayta boshlang — yangi havola ochiladi.',
           { remove_keyboard: true },
         );
         return;
