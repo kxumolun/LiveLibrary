@@ -232,17 +232,17 @@ export class TelegramOtpService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      // Kontakt yuborilgandan keyin "📱 Telefon raqamni yuborish" tugmasi qolib ketmasligi uchun
-      // reply keyboard'ni olib tashlaymiz.
-      await this.sendMessage(chatId, 'Rahmat! ✅', { remove_keyboard: true });
-
       if (!pending.otpSent) {
         pending.otpSent = true;
         // OTP kodni yuboramiz
         await this.sendMessage(
           chatId,
           `Tasdiqlash kodi: <b>${pending.otp}</b>\n\nKodni ro‘yxatdan o‘tish sahifasiga kiriting.`,
+          { remove_keyboard: true, selective: true },
         );
+      } else {
+        // OTP allaqachon yuborilgan bo'lsa ham keyboard qolib ketmasin.
+        await this.sendMessage(chatId, 'Tayyor ✅', { remove_keyboard: true, selective: true });
       }
       return;
     }
