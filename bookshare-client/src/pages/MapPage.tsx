@@ -261,6 +261,21 @@ export default function MapPage() {
           </div>
         </div>
 
+        <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <p className="text-sm text-surface-900/60">
+            Ko‘proq foydalanuvchi va kitob topish uchun radiusni kengaytirib ko‘ring.
+          </p>
+          <button
+            type="button"
+            onClick={openRadiusSheet}
+            className="md:hidden w-fit text-sm font-semibold text-primary-700 hover:underline"
+          >
+            Radiusni sozlash →
+          </button>
+        </div>
+
+       
+
         {radiusSheetVisible && (
           <div className="md:hidden fixed inset-0 z-50">
             <button
