@@ -166,7 +166,14 @@ export class TelegramOtpService implements OnModuleInit, OnModuleDestroy {
     if (text?.startsWith('/start')) {
       const parts = text.split(' ');
       const pendingId = parts[1]?.trim();
-      if (!pendingId) return;
+      if (!pendingId) {
+        await this.sendMessage(
+          chatId,
+          'Assalomu alaykum! 👋\n\nTelegram ulash uchun ilovadagi “Telegram orqali tasdiqlash” tugmasini bosing — u sizni botga maxsus havola bilan olib keladi.',
+          { remove_keyboard: true },
+        );
+        return;
+      }
 
       const pendingLink = this.pendingLinkById.get(pendingId);
       if (pendingLink) {
@@ -182,9 +189,28 @@ export class TelegramOtpService implements OnModuleInit, OnModuleDestroy {
 
       const pending = this.pendingById.get(pendingId);
       if (!pending) {
+        // Link muddati tugagan bo'lishi mumkin. Agar chat allaqachon ulangan bo'lsa, shuni aytamiz.
+        try {
+          const existing = await this.prisma.user.findFirst({
+            where: { telegramChatId: BigInt(chatId) as any },
+            select: { fullName: true },
+          });
+          if (existing?.fullName) {
+            await this.sendMessage(
+              chatId,
+              `Sizning Telegram allaqachon ulangan: <b>${existing.fullName}</b> ✅\n\nAgar qayta ulash kerak bo‘lsa, ilovadagi profil bo‘limidan Telegram ulashni qayta boshlang.`,
+              { remove_keyboard: true },
+            );
+            return;
+          }
+        } catch {
+          // migration pending bo'lsa telegramChatId field yo'q bo'lishi mumkin
+        }
+
         await this.sendMessage(
           chatId,
-          'Kechirasiz, bu tasdiqlash muddati tugagan yoki topilmadi.',
+          'Bu tasdiqlash havolasi eskirib qolgan yoki topilmadi.\n\nIltimos, ilovaga qayting va Telegram tasdiqlashni qayta boshlang (yangi havola ochiladi).',
+          { remove_keyboard: true },
         );
         return;
       }
